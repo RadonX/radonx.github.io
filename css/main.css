@@ -15,3 +15,11 @@
     text-align: center;
     margin: 0;
 }
+#inputfield {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 2em;
+    text-align: center;
+}
