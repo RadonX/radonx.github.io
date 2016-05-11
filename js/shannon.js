@@ -60,15 +60,8 @@ $(function() {
             $(".letter:eq(" + (index+1) + ")").focus();
             thisValidChar = JSON.parse(validCharStr);
 
-            // $.get(
-            //     "http://77e1486a.ngrok.io/shannon",
-            //     {"q" : newcount},
-            //     function(data) {
-            //        alert('page content: ' + data);
-            //     }
-            // );
             $.ajax({
-                url: "http://127.0.0.1:5001/shannon?q="+newcount,
+                url: "http://77e1486a.ngrok.io/shannon?q="+newcount,
                 type: "GET",
                 crossDomain: true,
                 success: function (response) {
