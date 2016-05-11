@@ -22,4 +22,5 @@
     width: 100%;
     padding: 2em;
     text-align: center;
+    z-index: 10;
 }
