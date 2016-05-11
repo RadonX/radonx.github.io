@@ -31,7 +31,8 @@ function getEntropy(nLetter) {
         if (counts[i] == 0) continue;
         entropy -= counts[i] / nLetter * Math.log(counts[i] / nLetter);
     }
-    $('#entropy')[0].innerText = entropy;
+    $('#entropy')[0].innerText = entropy / Math.log(2);
+    $('#perplexity')[0].innerText = Math.pow(2,entropy);
 }
 
 $(function() {
