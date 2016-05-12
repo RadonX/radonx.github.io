@@ -1,6 +1,13 @@
 var that;
-var text = "With Great Power Comes Great Responsibility".toUpperCase();
-var validChar = {"A":0,"B":0,"C":0,"D":0,"E":0,"F":0,"G":0,"H":0,"I":0,"J":0,"K":0,"L":0,"M":0,"N":0,"O":0,"P":0,"Q":0,"R":0,"S":0,"T":0,"U":0,"V":0,"W":0,"X":0,"Y":0,"Z":0,",":0,".":0," ":0};
+var textList = ["With Great Power Comes Great Responsibility".toUpperCase(),
+        "he makes us watch the Discovery Channel all day long".toUpperCase(),
+        "How about we all go out to dinner tomorrow night".toUpperCase(),
+        "I'm gonna make him an offer he can't refuse".toUpperCase(),
+        "do you want to build a snowman".toUpperCase(),
+        "If happiness knocks on your door, let it come in".toUpperCase()
+        ];
+var text;
+var validChar = {"A":0,"B":0,"C":0,"D":0,"E":0,"F":0,"G":0,"H":0,"I":0,"J":0,"K":0,"L":0,"M":0,"N":0,"O":0,"P":0,"Q":0,"R":0,"S":0,"T":0,"U":0,"V":0,"W":0,"X":0,"Y":0,"Z":0,",":0,".":0," ":0,"'":0};
 var charLen;
 var validCharStr = JSON.stringify(validChar);
 var index;
@@ -8,13 +15,15 @@ var thisValidChar;
 var counts;
 var totalCount;
 
-function init() {
+function initInputBox(callback){
+    console.log(2);
     var inputbox = '<div class="box"><input type="text" class="letter"><p>0</p></div>';
     var inputfield = $('#inputfield');
     var i;
     for (i = 0; i < text.length; i++) {
         inputfield.append(inputbox);
     }
+
     totalCount = 0;
     counts = new Array();
     charLen = Object.keys(validChar).length;
@@ -22,8 +31,25 @@ function init() {
         counts.push(0);
     }
     thisValidChar = JSON.parse(validCharStr);
+
+    callback.apply(this,[]);
 }
-init();
+
+function init(callback) {
+    // randomly select a sentence
+    var textId = Math.floor(Math.random() * (textList.length - 0) + 0); //[)
+    text = textList[textId];
+    $('#textId')[0].innerText = (textId+1);
+    console.log(1);
+    callback.apply(this,[]);
+}
+
+init(function(){
+  initInputBox(function(){
+  })
+});
+
+
 
 function getEntropy(nLetter) {
     var entropy = 0;
