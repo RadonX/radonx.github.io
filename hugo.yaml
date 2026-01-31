@@ -1,0 +1,76 @@
+baseURL: "https://example.github.io/"  # 上线后可改
+languageCode: "zh"
+title: "Miller's Atelier"
+
+timeZone: "America/Los_Angeles"
+
+enableRobotsTXT: true
+
+defaultContentLanguage: zh
+defaultContentLanguageInSubdir: true
+
+languages:
+  zh:
+    languageName: "中文"
+    weight: 1
+    title: "磨坊主的工坊"
+    params:
+      profileMode:
+        enabled: false
+      homeInfoParams:
+        Title: "磨坊主的工坊"
+        Content: "写作 · 文学 · 艺术 · 科学 · 技术原理"
+  en:
+    languageName: "English"
+    weight: 2
+    title: "Miller's Atelier"
+    params:
+      profileMode:
+        enabled: false
+      homeInfoParams:
+        Title: "Miller's Atelier"
+        Content: "Writing · Literature · Art · Science · Principles"
+
+outputs:
+  home:
+    - HTML
+    - RSS
+    - JSON
+
+theme: "PaperMod"
+
+params:
+  env: production
+  ShowReadingTime: true
+  ShowToc: true
+  TocOpen: false
+  ShowCodeCopyButtons: true
+  ShowBreadCrumbs: true
+  ShowPostNavLinks: true
+  ShowShareButtons: false
+  disableSpecial1stPost: true
+
+  # 未来可开：评论（Giscus）、数学公式（KaTeX/MathJax）
+
+  # 预留：自定义 CSS（用于后续艺术化排版）
+  customCSS:
+    - css/custom.css
+
+menu:
+  main:
+    - identifier: posts
+      name: Posts
+      url: posts/
+      weight: 10
+    - identifier: about
+      name: About
+      url: about/
+      weight: 20
+
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+
+permalinks:
+  posts: "/:section/:year/:month/:slug/"
