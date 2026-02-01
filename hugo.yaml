@@ -1,25 +1,17 @@
-baseURL: "https://example.github.io/"  # 上线后可改
-languageCode: "zh"
-title: "Miller's Atelier"
+baseURL: "https://radonx.github.io/"
+languageCode: "zh-CN"
+title: "磨坊主的工坊"
 
 timeZone: "America/Los_Angeles"
 
 enableRobotsTXT: true
 
+# 多语言配置
 defaultContentLanguage: zh
-defaultContentLanguageInSubdir: false
-
 languages:
   zh:
     languageName: "中文"
     weight: 1
-    title: "磨坊主的工坊"
-    params:
-      profileMode:
-        enabled: false
-      homeInfoParams:
-        Title: "磨坊主的工坊"
-        Content: "写作 · 文学 · 艺术 · 科学 · 技术原理"
   en:
     languageName: "English"
     weight: 2
@@ -31,14 +23,7 @@ languages:
         Title: "Miller's Atelier"
         Content: "Writing · Literature · Art · Science · Principles"
 
-outputs:
-  home:
-    - HTML
-    - RSS
-    - JSON
-
-theme: "PaperMod"
-
+# 中文（默认语言）的配置放在根级别
 params:
   env: production
   ShowReadingTime: true
@@ -49,12 +34,21 @@ params:
   ShowPostNavLinks: true
   ShowShareButtons: false
   disableSpecial1stPost: true
-
-  # 未来可开：评论（Giscus）、数学公式（KaTeX/MathJax）
-
-  # 预留：自定义 CSS（用于后续艺术化排版）
+  profileMode:
+    enabled: false
+  homeInfoParams:
+    Title: "磨坊主的工坊"
+    Content: "写作 · 文学 · 艺术 · 科学 · 技术原理"
   customCSS:
     - css/custom.css
+
+outputs:
+  home:
+    - HTML
+    - RSS
+    - JSON
+
+theme: "PaperMod"
 
 menu:
   main:
@@ -78,3 +72,4 @@ markup:
 
 permalinks:
   posts: "/:section/:year/:month/:slug/"
+  yorozuya: "/:year/:month/:slug/"
