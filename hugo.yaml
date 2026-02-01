@@ -59,13 +59,17 @@ params:
 menu:
   main:
     - identifier: posts
-      name: Posts
+      name: 文章
       url: posts/
       weight: 10
-    - identifier: about
-      name: About
-      url: about/
+    - identifier: yorozuya
+      name: 万事屋
+      url: yorozuya/
       weight: 20
+    - identifier: about
+      name: 关于
+      url: about/
+      weight: 30
 
 markup:
   goldmark:
