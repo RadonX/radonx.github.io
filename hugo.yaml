@@ -7,7 +7,7 @@ timeZone: "America/Los_Angeles"
 enableRobotsTXT: true
 
 defaultContentLanguage: zh
-defaultContentLanguageInSubdir: true
+defaultContentLanguageInSubdir: false
 
 languages:
   zh:
@@ -60,15 +60,15 @@ menu:
   main:
     - identifier: posts
       name: 文章
-      url: posts/
+      url: /posts/
       weight: 10
     - identifier: yorozuya
       name: 万事屋
-      url: yorozuya/
+      url: /yorozuya/
       weight: 20
     - identifier: about
       name: 关于
-      url: about/
+      url: /about/
       weight: 30
 
 markup:
