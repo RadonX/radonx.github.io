@@ -72,4 +72,4 @@ markup:
 
 permalinks:
   posts: "/posts/:year/:month/:slug/"
-  yorozuya: "/yorozuya/:year/:month/:slug/"
+  yorozuya: "/:year/:month/:slug/"
