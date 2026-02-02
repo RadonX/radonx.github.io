@@ -71,5 +71,5 @@ markup:
       unsafe: true
 
 permalinks:
-  posts: "/:section/:year/:month/:slug/"
-  yorozuya: "/:year/:month/:slug/"
+  posts: "/posts/:year/:month/:slug/"
+  yorozuya: "/yorozuya/:year/:month/:slug/"
