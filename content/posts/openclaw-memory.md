@@ -23,13 +23,11 @@ OpenClaw 的设计机制其实离不开它的 Sessions 这个概念。如果你�
 
 | 你以为你在说 | OpenClaw 里更接近的对象 | 它主要解决的问题 |
 |---|---|---|
-| “同一段对话” | **sessionKey**（例如 DM 的 main key、某个群、某个 topic） | 哪些消息应该共享上下文（分组规则） |
+| “同一段对话” | **sessionKey**（例如某个私信、某个群、某个 topic） | 哪些消息应该共享上下文（分组规则） |
 | “这个会话文件” | **sessionId**（某次会话实例） | 同一个 sessionKey 在 reset 后会换一个新的实例 |
 | “聊天记录” | **transcript JSONL**（通常按 sessionId 落盘） | 历史保留/可追溯；不等于当前上下文窗口 |
 | “当前上下文” | 本次 LLM call 组装出来的 context（含裁剪/摘要） | 模型这一次真正能看到什么 |
 | “记忆文件” | workspace 下的 `memory/*.md`（durable notes） | 可长期保存、可检索、可迁移 |
-
-（官方文档把这些东西的落点讲得很清楚：<https://docs.openclaw.ai/concepts/session>）
 
 说到这里，好像还得先介绍一下在 OpenClaw 里面 agent 以及 workspace 这个概念。每一个 agent 都对应有自己的一个 workspace，在那里面存了他的一些初始 prompt，大致可以理解为系统 prompt。然后在这些系统 prompt 里面会有一些文字上的指引，来教 agent 如何维护他自己的 system prompt。
 
@@ -58,21 +56,15 @@ pre-compaction（更准确地说是 *pre-compaction memory flush*）并不是“
 这件事有两个很工程、也很不浪漫的前提：
 
 - 它通常发生在“会话快满了”的时候，而不是按日历发生。
-- 它还要求当时 workspace 是可写的；否则它提醒了也没法落盘。
-
-（官方文档在 Session Management 里也明确把 *Pre-compaction memory flush* 作为 session lifecycle 的一部分提到：<https://docs.openclaw.ai/concepts/session>）
+- 它还要求运行环境允许写入 workspace（比如你的 workspace 目录不是只读、也没有被沙盒限制写盘）；否则它提醒了也没法落盘。
 
 对这一部分我就有许多好奇的点：这是有一个自动的工具吗？这是有一个自动的每日写入工具吗？这是有一个机制来每日提取每日的记忆吗？
 
 后来发现这个机制比想象的要粗糙许多。他只会在一个对话被压缩的时候才会提取。不过这件事情想来其实是非常符合道理的，只是说当你跟同一个 agent 开了很多个对话来交流不同的话题的话，其实很多话题一天下来也不会被压缩。虽然说执行任务能够用到比较多的 token，但是其实在设置阶段，我觉得我现在与 agent 更多的是进行一些交流，让他帮助我学习 OpenClaw 的架构。这样的交流其实在 GPT 的 context window 里面，常常一天是不会触发压缩机制的。
 
-这里也顺便把 compaction 的位置钉一下：compaction 解决的是“上下文窗口快满了怎么办”。
+这里也顺便把 compaction 的位置钉一下：你当然知道 compaction 是“摘要化/压缩上下文”的通用概念——我当时真正没搞明白的是：**在 OpenClaw 里，compaction 负责的是“同一段对话怎么继续聊下去”，而不是“开启一段新对话”。**
 
-它的动作不是“开一个新会话”，而是在**同一个 sessionId** 里写入一条摘要（summary）来腾出上下文空间，让对话能继续。
-
-所以 compaction 更像“房间整理”，而不是“换一颗新大脑”。
-
-（同样在官方 Session Management 文档里能找到它与 reset policy 的边界：<https://docs.openclaw.ai/concepts/session>）
+它更接近“房间整理”，不是“换一颗新大脑”。
 
 那如果像这种情况下，我发现短对话不会触发压缩机制的短对话，在没有 MemorySearch 的功能下就相当于被抛弃了一样，就像不存在一样。它只会存在 SessionLog 里面。
 
@@ -88,23 +80,23 @@ pre-compaction（更准确地说是 *pre-compaction memory flush*）并不是“
 
 我当时的错误理解是：`/new` 会新建一个 sessionId，但 `/reset` 可能不会。
 
-更正一下（这是事实层面的修正）：**在默认语义里，`/new` 与 `/reset` 都属于 reset triggers，都会 start a fresh session id。**
+**在默认语义里，`/new` 与 `/reset` 都属于 reset triggers，都会 start a fresh session id。**
 
 至于我当时提到的 `previousSessionEntry`：它更像是系统在 reset 时保留的一份“旧会话指针/元信息”，方便后续逻辑（例如某些 hooks）引用“刚刚被切掉的那个会话”。它并不等价于“自动把旧会话最后 N 条消息加载进新会话上下文”。（官方文档对 reset triggers 的描述见：<https://docs.openclaw.ai/concepts/session>）
 
 我当时想搞清楚的其实是两件事：
 
 1) `/new` 和 `/reset` 既然都是 reset trigger，它们到底差在哪？
-2) 为什么我看到有人说“/new 会写 memory，但 /reset 不会”？
+2) 为什么我观察到：`/new` 往往更容易“把东西写进外置记忆”，而 `/reset` 则不一定？
 
 在事实层面（而不是我的猜测层面），两者最稳妥的差异是：**它们会触发不同的 command hook 事件名**。
 
 - `/new` 对应 `command:new`
 - `/reset` 对应 `command:reset`
 
-如果你有一个 hook（比如保存 session 到外置记忆的 hook）只订阅了 `command:new`，那它当然就只会在 `/new` 的时候运行。
+如果你有一个 hook（比如保存 session 到外置记忆的 hook）只订阅了 `command:new`，那它就只会在 `/new` 的时候运行。
 
-而我这里“我不太记得 / 可能是”的那段，本意是想请你把我模糊的猜测纠正成确定结论：我现在更倾向于把它写成一句更安全的话——
+而我这里“我不太记得 / 可能是”的那段，本意是想请你把我模糊的猜测收敛成更稳妥的事实边界：
 
 > reset 时系统确实会保留一个 previousSessionEntry 之类的旧会话引用，但它的主要用途是给后续逻辑/钩子使用；至于是否会把旧会话的最后 N 条直接塞回新会话上下文，则取决于具体实现与配置，不应该在没有证据时当成默认事实。
 
@@ -161,6 +153,11 @@ Gemini 模型有一个特点，就是它很容易进入一种模式，无论是�
 而同时为了分割不同的话题、不同的上下文，除了以对话为单位进行分割，也适合以 agent 为单位进行分割。比如说你有一个专门为你处理电子邮件的 agent，那么即使他的对话被反复重置、被每日重置，他永远都记得他的主要存在目的是处理电子邮件。
 
 所以我想作者有可能已经拥有大量的分工型 agent 来解决我们这些其他用户第一次使用他的产品时所面临的关键信息丢失的问题。
+
+
+## 参考
+
+- Session Management（官方文档）：https://docs.openclaw.ai/concepts/session
 
 ---
 
