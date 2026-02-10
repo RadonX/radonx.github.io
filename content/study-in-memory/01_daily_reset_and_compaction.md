@@ -8,6 +8,13 @@ tags: ["OpenClaw", "Session Lifecycle"]
 
 # Daily reset, idle reset, and compaction
 
+## 本专栏目录（Pt.1–Pt.4）
+
+- Pt.1: Daily reset and compaction（本文）
+- Pt.2: /new vs /reset：同一条 reset 入口，不同的“记忆钩子”
+- Pt.3: Hook 事件：有哪些、没有哪些，以及怎么把它们用在“可控自动化”上
+- Pt.4: “Companion AI” 幻觉与工程现实：为什么 OpenClaw 更偏好 clean-slate
+
 这篇笔记解决一个高频混淆：**“会话何时会变‘新’？”** 在 OpenClaw 里主要有两条完全不同的路径：
 
 1) **Reset（换一颗新大脑 / 新 sessionId）**：/new、/reset、daily reset、idle reset
@@ -33,6 +40,8 @@ tags: ["OpenClaw", "Session Lifecycle"]
 | **Pre-compaction memory flush** | 接近自动 compaction 时，可能先跑一次“silent memory flush” | 追加一个“提醒写 durable notes 的回合” | ❌ | 取决于你是否真的写了文件 | 把重要内容写到 workspace/memory（外置记忆） |
 
 **文档证据点：** OpenClaw 的 session 生命周期在 `docs/concepts/session.md` 有明确描述，包括 daily reset 的默认时间点、idle 与 daily 的优先级、以及“过期判断发生在下一条入站消息”。
+
+- Session Management（官方文档）：<https://docs.openclaw.ai/concepts/session>
 
 ## Daily reset 的关键细节（最容易被误读）
 
@@ -80,10 +89,12 @@ compaction 的核心特征：
 - **显式 /new（触发 session-memory hook 写盘）**
 - 或者把重要结论写进你的外置知识库（Obsidian/LogSeq/仓库）并让 OpenClaw 的 memory_search 能索引到
 
-## 这一篇的“纠错点”（对素材的审核结论）
+## 这一篇的“纠错点”（给读者的一个提醒）
 
-当前素材中最大的问题是：把大量 gateway logs / tool 结果原封不动贴进正文，导致读者看不到结论。
+如果你是从“体验/直觉”出发去理解 OpenClaw 的记忆机制，很容易把 **daily reset / idle reset / /new / compaction** 当成一类东西。
 
-我已把它们压缩为上面的机制表 + 结论段，并把需要的“证据点”落到官方文档（`docs/concepts/session.md`）上。
+读这篇时建议你先只记住一句话：
 
-下一篇（Pt. 2）会专门解决：/new vs /reset、previousSessionEntry 以及“为什么只有 /new 会触发 session-memory hook”。
+- **reset 是“换 sessionId”，compaction 是“同一 sessionId 内做摘要”。**
+
+下一篇（Pt.2）会专门把 `/new` 与 `/reset` 在“reset 同义、hook 不同义”的边界上讲清楚。

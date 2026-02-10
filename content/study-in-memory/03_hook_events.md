@@ -71,7 +71,11 @@ tags: ["OpenClaw", "Automation", "Hooks"]
 
 => 如果你想定制它，通常要改实现或提供新的配置项，而不是“写一个 hook”。
 
-## 当前 bundled hooks（给素材一个确定清单）
+## 当前 bundled hooks（给读者一个确定清单）
+
+- Session Management（官方文档，了解 reset/compaction/flush 的边界）：<https://docs.openclaw.ai/concepts/session>
+
+## 当前 bundled hooks（给读者一个确定清单）
 
 以你们的讨论为准（且以 repo 当前实现为准），常见 bundled hooks 包括：
 
@@ -99,11 +103,14 @@ tags: ["OpenClaw", "Automation", "Hooks"]
 
 - 观察 outbound 再桥接（实现复杂、容易循环、边界难控）
 
-## 对当前素材的审核结论（需要修改点）
+## 这一篇的“纠错点”（给读者的一个提醒）
 
-- Pt.3 之前曾被另一个 agent 写成了“哲学稿”（且与 Pt.4 重复），并且文件名也被改坏，导致 `03_hook_events.md` 丢失。
-- 我已在本 commit 中恢复：
-  - 文件名：`03_hook_events.md`
-  - 内容：hook taxonomy + hook vs runtime 边界
+当你在系统里观察到一个行为，很容易下意识地寻找一个“对应的 hook event”。
 
-下一篇（Pt.4）会把这些工程结论上升到“为什么作者偏好 clean-slate + 外置记忆，而不是无限长会话”的设计取舍。
+但 OpenClaw 的设计里，有些东西确实是 hook（你能订阅），有些东西是 runtime 机制（它只是发生了，并不对外暴露为可订阅事件）。
+
+所以读这一篇时建议带着一个问题：
+
+- **我看到的这个行为，究竟是 hook，还是 runtime 路径里的一个调用点？**
+
+下一篇（Pt.4）会把这些工程结论收束成设计取舍：为什么作者偏好 clean-slate + 外置记忆，而不是无限长会话。
