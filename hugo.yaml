@@ -60,10 +60,14 @@ menu:
       name: 万事屋
       url: /yorozuya/
       weight: 20
+    - identifier: study-in-memory
+      name: "A Study in Memory"
+      url: /study-in-memory/
+      weight: 30
     - identifier: about
       name: 关于
       url: /about/
-      weight: 30
+      weight: 40
 
 markup:
   goldmark:
@@ -73,3 +77,4 @@ markup:
 permalinks:
   posts: "/posts/:year/:month/:slug/"
   yorozuya: "/:year/:month/:slug/"
+  study-in-memory: "/study-in-memory/:slug/"
