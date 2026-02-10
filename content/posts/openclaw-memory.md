@@ -15,7 +15,9 @@ tags: ["AI", "OpenClaw", "memory", "agent"]
 
 ## Sessions：一个看似简单却深刻的设计
 
-OpenClaw 的设计机制其实离不开它的 Sessions 这个概念。如果你去读它官方文档的 Sessions 一页，可以很清楚地看到它的一些设计。简单地说，你与一个 agent 的所有私信占用的是同样的 session。
+OpenClaw 的设计机制其实离不开它的 Sessions 这个概念。如果你去读它官方文档的 Sessions 一页，可以很清楚地看到它的一些设计。简单地说：**在默认配置下**，你与同一个 agent 的私信往往会落到同一个“主 session”（为了连续性）。
+
+但这里有一个我当时没意识到的细节：这并不是“私信天然共享 session”，而是 OpenClaw 的 `session.dmScope` 默认就会把 DM 聚合到同一个 key（你也可以改成按人/按渠道拆开，以免多用户 DM 共用上下文）。
 
 说到这里，好像还得先介绍一下在 OpenClaw 里面 agent 以及 workspace 这个概念。每一个 agent 都对应有自己的一个 workspace，在那里面存了他的一些初始 prompt，大致可以理解为系统 prompt。然后在这些系统 prompt 里面会有一些文字上的指引，来教 agent 如何维护他自己的 system prompt。
 
@@ -35,13 +37,30 @@ OpenClaw 在最外面的一层，也就是各种 IM 工具，你可以把一个 
 
 使用得更多了以后，很多关于 OpenClaw 的记忆机制的文章一开始就会提到：OpenClaw 的 agent 会维护自己的 memory 文件夹，然后他有一套叫做 precompaction 的机制，会把你在对话里面提到的要点存到每日记忆文件里面去。
 
-[此处插入：precompaction 机制的技术分析] 
+这里先把我当时最困惑的那个词讲清楚：
+
+pre-compaction（更准确地说是 *pre-compaction memory flush*）并不是“每天自动写日记”的机制。
+
+它更像是在某个会话快要触发 **自动 compaction** 的前夕，系统可能会插入一次“安静的提醒回合”，提醒模型把重要结论写到可持久化的文件里（例如 workspace 的 memory notes）。
+
+这件事有两个很工程、也很不浪漫的前提：
+
+- 它通常发生在“会话快满了”的时候，而不是按日历发生。
+- 它还要求当时 workspace 是可写的；否则它提醒了也没法落盘。
+
+（官方文档在 Session Management 里也明确把 *Pre-compaction memory flush* 作为 session lifecycle 的一部分提到：<https://docs.openclaw.ai/concepts/session>）
 
 对这一部分我就有许多好奇的点：这是有一个自动的工具吗？这是有一个自动的每日写入工具吗？这是有一个机制来每日提取每日的记忆吗？
 
 后来发现这个机制比想象的要粗糙许多。他只会在一个对话被压缩的时候才会提取。不过这件事情想来其实是非常符合道理的，只是说当你跟同一个 agent 开了很多个对话来交流不同的话题的话，其实很多话题一天下来也不会被压缩。虽然说执行任务能够用到比较多的 token，但是其实在设置阶段，我觉得我现在与 agent 更多的是进行一些交流，让他帮助我学习 OpenClaw 的架构。这样的交流其实在 GPT 的 context window 里面，常常一天是不会触发压缩机制的。
 
-[此处插入：compaction 机制的详细分析] 
+这里也顺便把 compaction 的位置钉一下：compaction 解决的是“上下文窗口快满了怎么办”。
+
+它的动作不是“开一个新会话”，而是在**同一个 sessionId** 里写入一条摘要（summary）来腾出上下文空间，让对话能继续。
+
+所以 compaction 更像“房间整理”，而不是“换一颗新大脑”。
+
+（同样在官方 Session Management 文档里能找到它与 reset policy 的边界：<https://docs.openclaw.ai/concepts/session>）
 
 那如果像这种情况下，我发现短对话不会触发压缩机制的短对话，在没有 MemorySearch 的功能下就相当于被抛弃了一样，就像不存在一样。它只会存在 SessionLog 里面。
 
@@ -53,17 +72,39 @@ OpenClaw 在最外面的一层，也就是各种 IM 工具，你可以把一个 
 
 ## 发现对话被重置的那一刻
 
-我不辞辛苦地追问他，让他读文档、读代码。这里我发现 OpenClaw 有两种，除了 compaction 之外还有两种路径，分别是使用 OpenClaw 自带的 new command 和 reset command。这两者都会触发，其实不完全是同一次。首先 new 会新建一个 SessionID，reset 应该是不会。其次 new 会触发 previoussessionentry，然后它会加载进前一个 session 的最后 n 条消息。这里的 n 是可以设置的。
+我不辞辛苦地追问他，让他读文档、读代码。这里我发现 OpenClaw 除了 compaction 之外，还有一类我当时统称为“重置”的路径：使用 OpenClaw 自带的 `/new` 与 `/reset`。
 
-[此处插入：new command 和 reset command 的区别分析] 
+我当时的错误理解是：`/new` 会新建一个 sessionId，但 `/reset` 可能不会。
 
-[此处插入：previoussessionentry 的工作方式详解] 
+更正一下（这是事实层面的修正）：**在默认语义里，`/new` 与 `/reset` 都属于 reset triggers，都会 start a fresh session id。**
 
-我现在不太记得他加载这 N 条消息做什么了，有可能只是生成一个总结用来开启下一个对话。然后我也不记得 reset 是否也会使用这最后 N 条消息了。
+至于我当时提到的 `previousSessionEntry`：它更像是系统在 reset 时保留的一份“旧会话指针/元信息”，方便后续逻辑（例如某些 hooks）引用“刚刚被切掉的那个会话”。它并不等价于“自动把旧会话最后 N 条消息加载进新会话上下文”。（官方文档对 reset triggers 的描述见：<https://docs.openclaw.ai/concepts/session>）
+
+我当时想搞清楚的其实是两件事：
+
+1) `/new` 和 `/reset` 既然都是 reset trigger，它们到底差在哪？
+2) 为什么我看到有人说“/new 会写 memory，但 /reset 不会”？
+
+在事实层面（而不是我的猜测层面），两者最稳妥的差异是：**它们会触发不同的 command hook 事件名**。
+
+- `/new` 对应 `command:new`
+- `/reset` 对应 `command:reset`
+
+如果你有一个 hook（比如保存 session 到外置记忆的 hook）只订阅了 `command:new`，那它当然就只会在 `/new` 的时候运行。
+
+而我这里“我不太记得 / 可能是”的那段，本意是想请你把我模糊的猜测纠正成确定结论：我现在更倾向于把它写成一句更安全的话——
+
+> reset 时系统确实会保留一个 previousSessionEntry 之类的旧会话引用，但它的主要用途是给后续逻辑/钩子使用；至于是否会把旧会话的最后 N 条直接塞回新会话上下文，则取决于具体实现与配置，不应该在没有证据时当成默认事实。
 
 但是这两种机制，当你手动结束一个对话，或者因为当前对话过期然后自动 OpenClaw 自动新建一个对话，这就是我刚才说的第三种情况，这三种情况都不会触发 memoryflush，也就是 compaction 的时候要发生、compaction 之前所进行的那个操作。
 
-[此处插入：不同 hook event 的对比分析] 
+如果把我当时看到的现象拆成“机制层”，大概是三条线：
+
+- **Reset policy**：包括 daily reset / idle reset / manual reset（/new、/reset）。它解决的是“什么时候需要一个 fresh session id”。
+- **Compaction**：解决的是“同一个 session 聊太久、上下文快满了怎么办”。
+- **Hooks（命令钩子）**：解决的是“在某个命令被触发时，顺便做一件你想要的事情”（例如保存/审计/桥接）。
+
+我当时的混乱，主要来自于把这三条线误认为是同一条线。
 
 也就是说，只有在比较稀有的、由于一个对话太长而触发 compaction 的机制的时候，大多数时候你在一个对话里面所聊的话题都不会被保存下来。
 
