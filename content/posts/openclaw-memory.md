@@ -19,6 +19,18 @@ OpenClaw 的设计机制其实离不开它的 Sessions 这个概念。如果你�
 
 但这里有一个我当时没意识到的细节：这并不是“私信天然共享 session”，而是 OpenClaw 的 `session.dmScope` 默认就会把 DM 聚合到同一个 key（你也可以改成按人/按渠道拆开，以免多用户 DM 共用上下文）。
 
+为了避免后面越写越乱，我先在这里插一个“名词对齐”的小表格——它不解决观点，只解决我当时经常混用的几个词：
+
+| 你以为你在说 | OpenClaw 里更接近的对象 | 它主要解决的问题 |
+|---|---|---|
+| “同一段对话” | **sessionKey**（例如 DM 的 main key、某个群、某个 topic） | 哪些消息应该共享上下文（分组规则） |
+| “这个会话文件” | **sessionId**（某次会话实例） | 同一个 sessionKey 在 reset 后会换一个新的实例 |
+| “聊天记录” | **transcript JSONL**（通常按 sessionId 落盘） | 历史保留/可追溯；不等于当前上下文窗口 |
+| “当前上下文” | 本次 LLM call 组装出来的 context（含裁剪/摘要） | 模型这一次真正能看到什么 |
+| “记忆文件” | workspace 下的 `memory/*.md`（durable notes） | 可长期保存、可检索、可迁移 |
+
+（官方文档把这些东西的落点讲得很清楚：<https://docs.openclaw.ai/concepts/session>）
+
 说到这里，好像还得先介绍一下在 OpenClaw 里面 agent 以及 workspace 这个概念。每一个 agent 都对应有自己的一个 workspace，在那里面存了他的一些初始 prompt，大致可以理解为系统 prompt。然后在这些系统 prompt 里面会有一些文字上的指引，来教 agent 如何维护他自己的 system prompt。
 
 OpenClaw 在最外面的一层，也就是各种 IM 工具，你可以把一个 agent 想象成一个人。一个人可以有很多的 IM 账号，你可以有一个 Discord 账号，可以有你的手机号，可以有一个飞书账号、Telegram 账号。只要使用这些账号的都是同一个 agent，那我们其实就可以认为自己是在跟同一个人说话。
