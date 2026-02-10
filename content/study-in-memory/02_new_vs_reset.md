@@ -29,9 +29,6 @@ tags: ["OpenClaw", "Session Lifecycle", "Hooks"]
 
 `docs/concepts/session.md` 的 “Reset triggers” 明确写到：
 
-- Session Management（官方文档）：<https://docs.openclaw.ai/concepts/session>
-
-
 - exact `/new` or `/reset`（以及 resetTriggers 配置）会 start a fresh session id
 - 并把 remainder of the message through（即 `/new <text>` 会把 `<text>` 当成新 session 的第一条用户消息）
 
@@ -84,13 +81,15 @@ OpenClaw 的 hook 系统区分：
 | 只有 /new 才写 memory 文件吗？ | ✅ 默认是的（内置 session-memory 只监听 command:new） | 以为写 memory 是 reset 的内建副作用 |
 | daily reset 会自动写 daily logs 吗？ | ❌ 不会（见 Pt.1） | 把 daily reset 当成 daily logs 生成器 |
 
-## 这一篇的“纠错点”（给读者的一个提醒）
+## 对当前素材的审核结论（需要修改点）
 
-如果你只看到了“/new 与 /reset 都会 reset”，很容易顺手推导出“它们也会触发同样的记忆写盘”。
+这份素材里混入了大量“探索过程中的中间结论”，其中最需要纠正的是：
 
-这一步推导在 OpenClaw 里通常是错的：
+- “/new 和 /reset 在核心逻辑完全相同，所以 memory hook 也相同” —— **错**（hook 订阅不同）。
 
-- **reset 是 reset，hook 是 hook。**
-- `/new` 与 `/reset` 在 reset 层面同义，但在默认 bundled hooks 的订阅上并不同义。
+我在 PR 里会把它们改成上面的“reset 同义、hook 不同义”的表述，并把证据点分别落到：
 
-下一篇（Pt.3）会把 hook 的事件层级列出来，避免把 runtime 机制误当成 hook。
+- 文档：`docs/concepts/session.md`（reset triggers）
+- 代码/Hook 元数据：bundled `session-memory` hook 的 `events: ["command:new"]`（hook 只监听 /new）
+
+下一篇（Pt.3）会专门列出：OpenClaw 的 hook 事件有哪些、哪些常被误以为存在但其实不存在，以及如何把 hook 用在“可控的自动化桥接”上。
