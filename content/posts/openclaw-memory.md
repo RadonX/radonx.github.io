@@ -21,13 +21,15 @@ OpenClaw 的设计机制其实离不开它的 Sessions 这个概念。如果你�
 
 为了避免后面越写越乱，我先在这里插一个“名词对齐”的小表格——它不解决观点，只解决我当时经常混用的几个词：
 
-| 你以为你在说 | OpenClaw 里更接近的对象 | 它主要解决的问题 |
-|---|---|---|
-| “同一段对话” | **sessionKey**（例如某个私信、某个群、某个 topic） | 哪些消息应该共享上下文（分组规则） |
-| “这个会话文件” | **sessionId**（某次会话实例） | 同一个 sessionKey 在 reset 后会换一个新的实例 |
-| “聊天记录” | **transcript JSONL**（通常按 sessionId 落盘） | 历史保留/可追溯；不等于当前上下文窗口 |
-| “当前上下文” | 本次 LLM call 组装出来的 context（含裁剪/摘要） | 模型这一次真正能看到什么 |
-| “记忆文件” | workspace 下的 `memory/*.md`（durable notes） | 可长期保存、可检索、可迁移 |
+> 注：这一小段更像是“备忘录”，你也可以先跳过，后面看到 sessionKey / sessionId / transcript / memory 这些词混在一起的时候再回来看。
+>
+> | 你以为你在说 | OpenClaw 里更接近的对象 | 它主要解决的问题 |
+> |---|---|---|
+> | “同一段对话” | **sessionKey**（例如某个私信、某个群、某个 topic） | 哪些消息应该共享上下文（分组规则） |
+> | “这个会话文件” | **sessionId**（某次会话实例） | 同一个 sessionKey 在 reset 后会换一个新的实例 |
+> | “聊天记录” | **transcript JSONL**（通常按 sessionId 落盘） | 历史保留/可追溯；不等于当前上下文窗口 |
+> | “当前上下文” | 本次 LLM call 组装出来的 context（含裁剪/摘要） | 模型这一次真正能看到什么 |
+> | “记忆文件” | workspace 下的 `memory/*.md`（durable notes） | 可长期保存、可检索、可迁移 |
 
 说到这里，好像还得先介绍一下在 OpenClaw 里面 agent 以及 workspace 这个概念。每一个 agent 都对应有自己的一个 workspace，在那里面存了他的一些初始 prompt，大致可以理解为系统 prompt。然后在这些系统 prompt 里面会有一些文字上的指引，来教 agent 如何维护他自己的 system prompt。
 
