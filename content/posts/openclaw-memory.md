@@ -15,7 +15,7 @@ tags: ["AI", "OpenClaw", "memory", "agent"]
 
 ## Sessions：一个看似简单却深刻的设计
 
-OpenClaw 的设计机制其实离不开它的 Sessions 这个概念。如果你去读它官方文档的 Sessions 一页，可以很清楚地看到它的一些设计。简单地说：**在默认配置下**，你与同一个 agent 的私信往往会落到同一个“主 session”（为了连续性）。
+OpenClaw 的设计机制其实离不开它的 Sessions 这个概念。如果你去读它官方文档的 Sessions 一页，可以很清楚地看到它的一些设计。简单地说：**在默认配置下**，你与同一个 agent 的私信往往会落到同一个 session（为了连续性）。
 
 但这里有一个我当时没意识到的细节：这并不是“私信天然共享 session”，而是 OpenClaw 的 `session.dmScope` 默认就会把 DM 聚合到同一个 key（你也可以改成按人/按渠道拆开，以免多用户 DM 共用上下文）。
 
@@ -49,7 +49,7 @@ OpenClaw 在最外面的一层，也就是各种 IM 工具，你可以把一个 
 
 使用得更多了以后，很多关于 OpenClaw 的记忆机制的文章一开始就会提到：OpenClaw 的 agent 会维护自己的 memory 文件夹，然后他有一套叫做 precompaction 的机制，会把你在对话里面提到的要点存到每日记忆文件里面去。
 
-这里先把我当时最困惑的那个词讲清楚：
+这里先把我当时最困惑的两个词讲清楚：**pre-compaction** 和 **compaction**。
 
 pre-compaction（更准确地说是 *pre-compaction memory flush*）并不是“每天自动写日记”的机制。
 
@@ -68,6 +68,14 @@ pre-compaction（更准确地说是 *pre-compaction memory flush*）并不是“
 
 它更接近“房间整理”，不是“换一颗新大脑”。
 
+为了避免把这些词继续搅成一锅粥，我在这里再插一张很短的对照表（只讲 OpenClaw 里的 *session management* 语义）：
+
+| 机制 | 它在解决什么 | 是否换 sessionId | 结果看起来像 |
+|---|---|---:|---|
+| reset（/new、/reset、daily/idle reset） | 什么时候应该“开一段新会话” | ✅ | 换了一段新的对话（新的会话实例） |
+| compaction | 这一段对话还想继续聊，但上下文快满了 | ❌ | 旧内容被摘要化，腾出空间继续聊 |
+| pre-compaction memory flush | 在接近自动 compaction 前，提醒把结论写成可持久化笔记 | ❌ | 不一定有可见输出（但可能会写出 durable notes） |
+
 那如果像这种情况下，我发现短对话不会触发压缩机制的短对话，在没有 MemorySearch 的功能下就相当于被抛弃了一样，就像不存在一样。它只会存在 SessionLog 里面。
 
 这个后续也许我会看一下，再去研究一下打开 MemorySearch 以后它的加成有多少。但是在现在这个阶段，如此重要的提取记忆的功能只在对话压缩时发生？我原本会期待如此重要的记忆提取功能会对每天、每日的对话都进行操作，因为根据官方文档，当你开启一日的新对话的时候，他会查看过去两天的记忆文档。
@@ -84,7 +92,7 @@ pre-compaction（更准确地说是 *pre-compaction memory flush*）并不是“
 
 **在默认语义里，`/new` 与 `/reset` 都属于 reset triggers，都会 start a fresh session id。**
 
-至于我当时提到的 `previousSessionEntry`：它更像是系统在 reset 时保留的一份“旧会话指针/元信息”，方便后续逻辑（例如某些 hooks）引用“刚刚被切掉的那个会话”。它并不等价于“自动把旧会话最后 N 条消息加载进新会话上下文”。（官方文档对 reset triggers 的描述见：<https://docs.openclaw.ai/concepts/session>）
+至于我当时提到的 `previousSessionEntry`：它更像是系统在 reset 时保留的一份“旧会话指针/元信息”，方便后续逻辑（例如某些 hooks）引用“刚刚被切掉的那个会话”。它并不等价于“自动把旧会话最后 N 条消息加载进新会话上下文”。
 
 我当时想搞清楚的其实是两件事：
 
@@ -98,7 +106,7 @@ pre-compaction（更准确地说是 *pre-compaction memory flush*）并不是“
 
 如果你有一个 hook（比如保存 session 到外置记忆的 hook）只订阅了 `command:new`，那它就只会在 `/new` 的时候运行。
 
-而我这里“我不太记得 / 可能是”的那段，本意是想请你把我模糊的猜测收敛成更稳妥的事实边界：
+而我这里“我不太记得 / 可能是”的那段，我更想表达的是：我当时确实抓到了一个“会让记忆机制看起来很不透明”的点，但我不想在没有证据时把它写成默认事实。于是我只能先把边界写得保守一点：
 
 > reset 时系统确实会保留一个 previousSessionEntry 之类的旧会话引用，但它的主要用途是给后续逻辑/钩子使用；至于是否会把旧会话的最后 N 条直接塞回新会话上下文，则取决于具体实现与配置，不应该在没有证据时当成默认事实。
 
