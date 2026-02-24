@@ -14,6 +14,17 @@ tags: ["OpenClaw", "AI", "memory", "Session", "体验"]
 
 ## Sessions：看似简单的深刻设计
 
+> **技术背景：Session 状态层次表**
+> 
+> | 层级 | 存储位置 | 决定因素 | 用户可控性 |
+> |-----|---------|---------|-----------|
+> | SessionKey | `sessions.json` 中的键名 | chat_id + thread/topic_id | 配置绑定 |
+> | SessionId | 对应键名下的 `sessionId` 字段 | OpenClaw 自动生成 | 不可直接改 |
+> | JSONL 历史 | `<sessionId>.jsonl` 文件 | append-only 写入 | 可覆盖（有风险） |
+> | SessionStore | 内存中的 `SessionStoreEntry` | 从文件加载 + 45秒缓存 | 受缓存影响 |
+
+
+
 OpenClaw设计机制离不开Sessions概念。读官方文档Sessions页面，可以清楚看到设计思路：你与一个agent的所有私信占用同一个session。
 
 先介绍OpenClaw里agent和workspace概念。每个agent对应自己的workspace，存放初始prompt——可理解为系统prompt。这些系统prompt包含文字指引，教agent如何维护自己的系统prompt。
@@ -32,6 +43,25 @@ OpenClaw最外层是各种IM工具。把agent想象成一个人：一个人可�
 
 ## 记忆提取的困惑：粗糙机制
 
+> **技术背景：OpenClaw 会话文件布局**
+> 
+> ```
+> ~/.openclaw/agents/<agent>/sessions/
+> ├── sessions.json              # Session 索引（45秒缓存）
+> ├── <sessionId>-<topic>.jsonl   # 具体会话历史（实时读取）
+> └── .backups/                  # 自动备份
+> ```
+> 
+> | 操作 | 修改的文件 | 生效延迟 | 风险等级 |
+> |-----|----------|---------|---------|
+> | 正常对话 | `.jsonl` append | 立即 | 低 |
+> | `/new` | `sessions.json` + 新 `.jsonl` | 立即 | 低 |
+> | `/reset` | 清空 `.jsonl` | 立即 | 中（丢失当前上下文） |
+> | Session Fork（黑科技） | 覆盖 `.jsonl` | 立即* | 高（时间管理问题） |
+> 
+> *注：Fork 后立即生效是因为 `.jsonl` 是实时读取，但 `sessions.json` 有 45 秒缓存。*
+
+
 使用更多后，很多关于OpenClaw记忆机制的文章开头都提到：OpenClaw的agent维护自己的memory文件夹，有一套叫precompaction的机制，把对话中提到的要点存到每日记忆文件里。
 
 我有许多好奇：这是自动工具吗？自动的每日写入工具吗？每日提取记忆的机制吗？
@@ -47,6 +77,19 @@ OpenClaw最外层是各种IM工具。把agent想象成一个人：一个人可�
 我的关于对话的记忆都去哪了？
 
 ## 发现对话被重置的那一刻
+
+> **技术背景：Reset vs Compaction 机制对照表**
+> 
+> | 机制 | 触发条件 | 是否换新 SessionId | 是否触发 Memory Flush | 对上下文的影响 |
+> |-----|---------|------------------|---------------------|--------------|
+> | **Daily Reset** | 凌晨自动 / `idleTimeout` | ✅ 新建 SessionId | ❌ 不触发 | 完全清空，加载 `previousSessionEntry` |
+> | **Idle Reset** | 会话空闲超阈值 | ✅ 新建 SessionId | ❌ 不触发 | 同上 |
+> | **Manual /new** | 用户发送 `/new` | ✅ 新建 SessionId | ✅ **触发** | 先 Flush 到 memory/，再换 Session |
+> | **Manual /reset** | 用户发送 `/reset` | ❌ 保留 SessionId | ❌ 不触发 | 原地清空，保留 Session |
+> | **Compaction** | Context Window 接近上限 | ❌ 保留 SessionId | ✅ **触发** | 压缩历史，生成摘要 |
+> 
+> *关键发现：只有 Compaction 和 `/new` 会触发 memory flush，Daily/Idle Reset 不会。*
+
 
 我不辞辛苦追问他，让他读文档、读代码。这里发现OpenClaw有两种，除了compaction之外还有两种路径：使用OpenClaw自带的new command和reset command。这两者都会触发，不完全是同一次。首先new会新建SessionID，reset应该不会。其次new会触发previoussessionentry，加载前一个session的最后n条消息。这里的n可以设置。
 
@@ -77,6 +120,19 @@ Gemini模型有个特点：很容易进入一种模式，无论是失败模式�
 于是我开始研究恢复Session以及理解Session的建立机制。为了避免在恢复Session过程中破坏OpenClaw的整体运行，我也花了大量精力研究Session的建立机制。也是在这过程中我发现了关于SessionReset的秘密。
 
 ## 对"陪伴型AI"的反思
+
+> **技术背景：`/new` vs `/reset` 核心差异**
+> 
+> | 特性 | `/new`（同义词） | `/reset`（重置） |
+> |-----|----------------|----------------|
+> | SessionId | 生成新的 UUID | 保留原 SessionId |
+> | `previousSessionEntry` | ✅ **生成**（包含前会话最后 N 条） | ❌ 不生成 |
+> | Memory Flush 钩子 | ✅ **触发** | ❌ 不触发 |
+> | `resetTriggered` 标记 | `true` | `true` |
+> | 使用场景 | 主动保存记忆、开启新上下文 | 快速清空、不保存 |
+> 
+> *关键：`/new` 会触发 `command:new` 钩子，将当前会话保存到 `memory/YYYY-MM-DD-{slug}.md`；`/reset` 不会。*
+
 
 看到SessionReset的那一刻，我想起Peter曾经发表的观点，他不是无限对话的信徒。我想他宁可通过强制的SessionReset、一些更工程化的记忆建立机制，也不愿意让Session在反复压缩中无限延长。
 
