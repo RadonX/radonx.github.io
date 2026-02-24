@@ -52,6 +52,45 @@ tags: ["OpenClaw", "Session Lifecycle"]
 
    写 memory 文件只会在特定机制触发（例如 pre-compaction memory flush，或者 /new 的 session-memory hook；见后续第 2 篇）。
 
+## Memory 写入触发机制：什么时候才会写 `memory/` 文件？
+
+这是一个高频误解：很多人以为 daily reset 会自动生成 daily memory 文件。**这是错误的**。
+
+OpenClaw 中写入 `memory/YYYY-MM-DD-*.md` 文件的**只有 3 种途径**：
+
+| 触发方式 | 写入 `memory/` | 频率 | 文件日期 |
+|---------|---------------|------|----------|
+| **`/new` command** | ✅ Yes (via session-memory hook) | 手动触发 | **当天**（触发 `/new` 的日期） |
+| **Pre-compaction flush** | ✅ Yes (silent memory flush) | 上下文接近上限时 | **当天**（触发 flush 的日期） |
+| **Daily reset** | ❌ No | 每天（默认 04:00） | 无（不会自动写入） |
+| **Idle reset** | ❌ No | 闲置超时后 | 无（不会自动写入） |
+| **`/reset` command** | ❌ No (hook 不监听) | 手动触发 | 无 |
+
+**关键点**：
+
+1. **只有 `/new` 会写 memory 文件**
+   - 文件名：`memory/YYYY-MM-DD-{slug}.md`
+   - 日期 = **触发 `/new` 的当天**，不是前一天
+   - 例如：2 月 20 日开始对话，2 月 21 日发送 `/new` → 写入 `memory/2026-02-21-*.md`
+
+2. **Daily/idle reset 不会写 memory**
+   - 它们只是创建新 sessionId
+   - 不会触发任何 hook 写入 memory 文件
+   - 如果你的 session TTL = 7 天且从不手动 `/new`，那么 7 天内**不会有任何 daily memory 文件**
+
+3. **Pre-compaction flush 不可靠**
+   - 只在上下文接近上限时触发
+   - 短对话可能永远触发不了
+   - **不能依赖它作为每日记忆机制**
+
+**如何实现可靠的 daily memory？**
+
+如果你想要每天自动生成 memory 文件，需要：
+
+1. **手动方案**：每天发送 `/new`（触发 session-memory hook）
+2. **自动化方案**：创建一个 cron job，每天定时调用 `/new`（通过 `sessions_send` 或 webhook）
+3. **Agent 主动写入**：在 system prompt 中教导 agent 每天结束时主动写入 `memory/YYYY-MM-DD.md`
+
 ## Idle reset 的意义：它不是被 daily reset “覆盖掉”
 
 当 daily reset 和 idle reset 同时配置时，OpenClaw 的规则是：**哪个先让 session 过期，就用哪个**。
