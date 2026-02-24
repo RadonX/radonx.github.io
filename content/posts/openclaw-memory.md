@@ -35,13 +35,52 @@ OpenClaw 在最外面的一层，也就是各种 IM 工具，你可以把一个 
 
 使用得更多了以后，很多关于 OpenClaw 的记忆机制的文章一开始就会提到：OpenClaw 的 agent 会维护自己的 memory 文件夹，然后他有一套叫做 precompaction 的机制，会把你在对话里面提到的要点存到每日记忆文件里面去。
 
-[此处插入：precompaction 机制的技术分析] 
+### Pre-compaction 机制：接近上下文上限时的"抢救性记忆保存"
+
+Pre-compaction memory flush 是一个在 session 上下文接近窗口上限时触发的"静默记忆保存"机制。它的 prompt 是：
+
+> "Pre-compaction memory flush. Store durable memories now (use memory/YYYY-MM-DD.md; create memory/ if needed). If nothing to store, reply with NO_REPLY."
+
+**触发条件**：
+- Session 的 token 使用量接近 context window 上限
+- 默认阈值：`contextWindow - reserveTokensFloor - softThresholdTokens`
+- 其中 `softThresholdTokens` 默认为 4000
+
+**行为**：
+- Agent 会在压缩之前主动将重要信息写入 `memory/YYYY-MM-DD.md`
+- 这是一个"救火队员"式的机制，防止重要信息在压缩时丢失
+- 但它**只在接近上下文上限时触发**，不是每日自动运行
+
+**代码位置**：
+- `src/auto-reply/reply/agent-runner.ts:202`
+- `src/auto-reply/reply/agent-runner-memory.ts:27`
+- `src/auto-reply/reply/memory-flush.ts:77`
 
 对这一部分我就有许多好奇的点：这是有一个自动的工具吗？这是有一个自动的每日写入工具吗？这是有一个机制来每日提取每日的记忆吗？
 
 后来发现这个机制比想象的要粗糙许多。他只会在一个对话被压缩的时候才会提取。不过这件事情想来其实是非常符合道理的，只是说当你跟同一个 agent 开了很多个对话来交流不同的话题的话，其实很多话题一天下来也不会被压缩。虽然说执行任务能够用到比较多的 token，但是其实在设置阶段，我觉得我现在与 agent 更多的是进行一些交流，让他帮助我学习 OpenClaw 的架构。这样的交流其实在 GPT 的 context window 里面，常常一天是不会触发压缩机制的。
 
-[此处插入：compaction 机制的详细分析] 
+### Compaction 机制：不换脑，只做"房间整理"
+
+Compaction（压缩）是在**同一个 sessionId** 内进行的上下文整理，**不会创建新 session**。
+
+**触发条件**：
+- Session 上下文接近窗口上限（自动触发）
+- 用户手动发送 `/compact [instructions]` 命令
+
+**行为**：
+- 将旧的对话历史总结成一个简短的摘要条目
+- 释放上下文空间，让 session 可以继续使用
+- **不会创建新的 sessionId**
+- **不会**将旧对话"写入记忆文件"（那是由 pre-compaction flush 或 `/new` hook 做的）
+
+**与 Reset 的区别**：
+| | Compaction | Reset (/new, /reset) |
+|---|---|---|
+| **sessionId** | 不变 | 创建新的 |
+| **上下文** | 摘要化，但保留在同一 session | 完全清空（新 session） |
+| **JSONL 文件** | 写入摘要条目到同一文件 | 旧文件保留，新文件写入新 sessionId |
+| **记忆保存** | 不自动保存 | `/new` 会触发 session-memory hook |
 
 那如果像这种情况下，我发现短对话不会触发压缩机制的短对话，在没有 MemorySearch 的功能下就相当于被抛弃了一样，就像不存在一样。它只会存在 SessionLog 里面。
 
@@ -53,17 +92,63 @@ OpenClaw 在最外面的一层，也就是各种 IM 工具，你可以把一个 
 
 ## 发现对话被重置的那一刻
 
-我不辞辛苦地追问他，让他读文档、读代码。这里我发现 OpenClaw 有两种，除了 compaction 之外还有两种路径，分别是使用 OpenClaw 自带的 new command 和 reset command。这两者都会触发，其实不完全是同一次。首先 new 会新建一个 SessionID，reset 应该是不会。其次 new 会触发 previoussessionentry，然后它会加载进前一个 session 的最后 n 条消息。这里的 n 是可以设置的。
+我不辞辛苦地追问他，让他读文档、读代码。这里我发现 OpenClaw 有两种，除了 compaction 之外还有两种路径，分别是使用 OpenClaw 自带的 new command 和 reset command。
 
-[此处插入：new command 和 reset command 的区别分析] 
+### `/new` 和 `/reset` 的区别
 
-[此处插入：previoussessionentry 的工作方式详解] 
+经过深入的代码审查，我发现我之前的理解存在关键错误。以下是经过代码验证的准确机制：
 
-我现在不太记得他加载这 N 条消息做什么了，有可能只是生成一个总结用来开启下一个对话。然后我也不记得 reset 是否也会使用这最后 N 条消息了。
+**共同点**：
+- 两者都会创建新的 `sessionId`（重置会话）
+- 两者都会触发 `resetTriggered = true`
+- 两者都会创建 `previousSessionEntry`（旧会话的元数据快照）
+- **两者都不会将旧消息注入新会话的上下文**
+
+**唯一区别**：
+- `/new` 会触发 `session-memory` bundled hook，将旧会话的元数据保存到 `memory/YYYY-MM-DD-{slug}.md` 文件
+- `/reset` 不会触发这个 hook
+
+### `previousSessionEntry` 的工作方式
+
+我之前错误地认为 "new 会触发 previousSessionEntry，然后它会加载进前一个 session 的最后 n 条消息"。**这是错误的**。
+
+`previousSessionEntry` 只是旧会话的**元数据**（sessionId, sessionFile, updatedAt, totalTokens 等），**不包含任何对话内容**。它的作用是：
+1. 触发 `session_end` hook（旧会话）
+2. 触发 `session_start` hook（新会话，带 `resumedFrom` 参数）
+3. 让 `session-memory` hook 能够找到旧会话的 `.jsonl` 文件路径并保存记忆
+
+**但保存记忆 ≠ 注入上下文**：
+- `session-memory` hook 读取旧会话的最后 N 条消息（默认 15 条）是为了生成文件名 slug（例如 "config-debugging"）
+- 生成的记忆文件（`memory/YYYY-MM-DD-config-debugging.md`）**不会被自动注入新会话的上下文**
+- 新会话从空白开始（除了 system prompt），不会继承旧会话的消息
 
 但是这两种机制，当你手动结束一个对话，或者因为当前对话过期然后自动 OpenClaw 自动新建一个对话，这就是我刚才说的第三种情况，这三种情况都不会触发 memoryflush，也就是 compaction 的时候要发生、compaction 之前所进行的那个操作。
 
-[此处插入：不同 hook event 的对比分析] 
+### Hook 事件 vs Runtime 机制
+
+在探索 OpenClaw 的记忆保存机制时，我发现了一个重要的区别：
+
+**有些行为是 hook（事件订阅）**，你可以自定义响应：
+- `command:new`：`/new` 命令时触发（用于 session-memory hook）
+- `command:reset`：`/reset` 命令时触发
+- `command`：所有命令触发
+- `gateway:startup`：网关启动时触发
+- `agent:bootstrap`：agent 系统提示词注入时触发
+
+**有些行为是 runtime 机制（内部调用）**，不是对外暴露的 hook：
+- **Pre-compaction memory flush**：这是在接近上下文上限时的"静默回合"，提醒 agent 写 durable notes
+- **Compaction**：在同一个 session 内总结旧对话
+- **Daily/idle reset**：在收到下一条消息时判断 session 是否过期
+
+**关键区别**：
+- Hook 可以通过编写自定义 handler 来扩展
+- Runtime 机制是系统内置行为，需要改配置或实现才能定制
+
+**当前 bundled hooks**：
+- `session-memory`：监听 `command:new`，保存 session 到 `memory/YYYY-MM-DD-{slug}.md`
+- `command-logger`：监听 `command`，记录所有命令到日志
+- `boot-md`：监听 `gateway:startup`，运行 BOOT.md
+- `soul-evil`：监听 `agent:bootstrap`，在 purge window 时替换 SOUL.md
 
 也就是说，只有在比较稀有的、由于一个对话太长而触发 compaction 的机制的时候，大多数时候你在一个对话里面所聊的话题都不会被保存下来。
 
@@ -77,7 +162,20 @@ OpenClaw 在最外面的一层，也就是各种 IM 工具，你可以把一个 
 
 比如说我有一个专门配置 OpenClaw 的 Bot，它的 Session 里面其实都是放满了它对 OpenClaw 框架的理解。尽管我在这个 bot 的 system parameter 里面已经教导了他如何去查看官方文档和代码，但我还是希望当我已经琢磨 OpenClaw 的 memory 到 hook 的程序的时候，我能够不需要反复地进行这一轮探索来进行更深的提问。
 
-由于对话的不透明性，以及他在新建对话的时候会去加载前一个对话最后的、总结后的对话，对话被 reset 后其实并不是那么容易被察觉。或者说你无法判断那个是 AI 的幻觉还是什么，因为有些时候 AI 至少可以重新收集信息来还原你在前一轮对话中想做的事情。另外在 IM 中你去引用前一轮对话、提醒 AI 你们的进度也是非常容易的。所以如果前几轮恰巧有高质量的对话的话，其实很容易还原。
+由于对话的不透明性，对话被 reset 后其实并不是那么容易被察觉。或者说你无法判断那个是 AI 的幻觉还是什么，因为有些时候 AI 至少可以重新收集信息来还原你在前一轮对话中想做的事情。另外在 IM 中你去引用前一轮对话、提醒 AI 你们的进度也是非常容易的。所以如果前几轮恰巧有高质量的对话的话，其实很容易还原。
+
+### [修正] 为什么对话重置不容易察觉
+
+我之前错误地认为"新建对话的时候会去加载前一个对话最后的、总结后的对话"。**这也是错误的**。
+
+经过代码验证，新对话**不会加载前一个对话的任何内容**（除了 system prompt 中定义的 `MEMORY.md` 等长期记忆文件）。
+
+对话重置不容易察觉的真正原因是：
+1. **AI 可以重新收集信息**：当你提醒 AI "我们之前在讨论 X" 时，它可以根据这个提示重新开始对话
+2. **IM 引用很方便**：在 Telegram/Discord 中引用前一轮对话、提醒 AI 进度非常容易
+3. **高质量的对话容易还原**：如果前几轮对话有明确的目标和上下文，AI 可以快速"找回状态"
+
+但这**不是**因为系统自动加载了旧对话，而是因为 AI 的推理能力能够从少量提示中重建上下文。
 
 所以我在使用一周之后才注意到我们的对话被重置了。
 
