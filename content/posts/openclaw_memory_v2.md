@@ -82,7 +82,19 @@ OpenClaw最外层是IM工具。把agent想象成一个人：一个人可以有�
 > - 只有 Compaction 会触发 memory flush (即pre-compaction flush）
 > - `/new` 的 `session-memory` hook 会写入 memory 文件，但不注入上下文
 > - `session-memory` hook 使用 `previousSessionEntry.sessionFile`（.jsonl 文件路径）读取旧 session 的最后 n 条消息（默认 15 条），**只用于生成描述性的文件名 slug**（例如 "config-debugging"），然后将对话内容保存到 `memory/YYYY-MM-DD-{slug}.md` 文件。
-> - `previousSessionEntry` **只包含元数据**（sessionId, sessionFile, updatedAt, totalTokens 等），**不包含对话内容**
+
+> **技术背景：Pre-compaction Flush**
+>
+> | 特性 | Session Memory Hook | Pre-compaction Flush |
+> |-----|---------------------|---------------------|
+> | **触发时机** | `/new` 或 `/reset` 命令 | Context Window 接近上限 |
+> | **文件路径** | `memory/YYYY-MM-DD-{slug}.md` | `memory/YYYY-MM-DD.md`（固定） |
+> | **文件数量** | 每次触发创建新文件 | 每天一个固定文件 |
+> | **写入方式** | 覆盖/新建 | 追加（APPEND） |
+> | **谁写文件** | Hook 直接写 | Agent 主动写 |
+> | **确定性** | ✅ 100%（每次触发都写） | ❌ 不确定（Agent 可能不写） |
+>
+> **关键特性**：Pre-compaction flush 使用固定文件路径，多次 flush 追加到同一个文件。Prompt 明确要求："If the file already exists, APPEND new content only and do not overwrite existing entries."
 
 但不管是 new 还是 reset 机制，不管是手动结束，还是对话过期后自动 reset（这是第三种情况，后文会讨论），这两种机制都不会触发 memory flush，也就是 compaction 进行前的操作。换句话说，除了由于对话太长而触发 compaction 的少数情况，大多数时候对话都不会进行**被动**记忆提取（这里假设用户一般不手动发送`/new`)。
 
@@ -115,13 +127,11 @@ Gemini模型有个特点：很容易进入一种模式，无论是失败模式�
 >
 > **关键发现**：Daily/idle reset 都会创建新 SessionId，但**不会**触发 memory flush。
 
-
 > **关键澄清：新 Session 的行为**
 >
 > - 所有的reset（包括`/new` 和`/reset`）都不会将旧消息注入新 session 上下文
-> - 新 session 从空白开始（除了 system prompt），**不会继承旧消息**。除了 system prompt 中定义的 `MEMORY.md` 等长期记忆文件。
-> - `/new` 的记忆文件是**外置存储**，需要 Agent 主动读取才能使用
-> - 所有的记忆文件是外置存储，不会自动注入新 session 的上下文。Agent 必须主动读取（通过 `MEMORY.md` 或 `memorySearch`）才能使用这些记忆。
+> - 新 session 从空白开始。
+> - 所有的记忆文件是外置存储，Agent 必须主动读取（由 `AGENTS.md`提醒），通过 `MEMORY.md` 或 memory search才能使用这些记忆。
 
 看到SessionReset的那一刻，我想起Peter曾经发表的观点，他不是无限对话的信徒。我想他宁可通过强制的SessionReset、一些更工程化的记忆建立机制，也不愿意让Session在反复压缩中无限延长。
 
