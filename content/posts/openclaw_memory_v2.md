@@ -27,8 +27,6 @@ tags: ["OpenClaw", "AI", "memory", "Session", "体验"]
 
 OpenClaw设计机制离不开sessions概念，官方文档Sessions页面也有清楚的设计思路。
 
-
-
 OpenClaw最外层是IM工具。把agent想象成一个人：一个人可以有很多IM账号——Discord账号、手机号、飞书账号、Telegram账号。只要使用这些账号的都是同一个agent，我们就是在跟同一个人说话。
 
 默认设置下，你与同一个agent在不同IM中的私信共用同一个session。举例：你在Discord问银时agent（我有一个银魂的阿银agent)"我们去吃拉面嘛？"他在Discord回复你。这时你去Telegram跟他说"吃哪家？"Telegram里的银时agent知道你们上一条对话正在讨论拉面，也许会给你拉面建议。
@@ -50,9 +48,6 @@ OpenClaw最外层是IM工具。把agent想象成一个人：一个人可以有�
 > | 正常对话 | `.jsonl` append | 立即 | 低 |
 > | `/new` | `sessions.json` + 新 `.jsonl` | 立即 | 低 |
 > | `/reset` | 清空 `.jsonl` | 立即 | 中（丢失当前上下文） |
-> | Session Fork（黑科技） | 覆盖 `.jsonl` | 立即* | 高（时间管理问题） |
-> 
-> *注：Fork 后立即生效是因为 `.jsonl` 是实时读取，但 `sessions.json` 有 45 秒缓存。*
 
 先简单介绍OpenClaw里agent和workspace的概念。每个agent对应自己的workspace，存放初始prompt，如系统prompt。这些系统prompt还会教agent如何维护自己的系统prompt。
 
@@ -87,14 +82,14 @@ OpenClaw最外层是IM工具。把agent想象成一个人：一个人可以有�
 >
 > | 特性 | Session Memory Hook | Pre-compaction Flush |
 > |-----|---------------------|---------------------|
-> | **触发时机** | `/new` 或 `/reset` 命令 | Context Window 接近上限 |
+> | **触发时机** | `/new` 命令 | Context Window 接近上限 |
 > | **文件路径** | `memory/YYYY-MM-DD-{slug}.md` | `memory/YYYY-MM-DD.md`（固定） |
-> | **文件数量** | 每次触发创建新文件 | 每天一个固定文件 |
+> | **文件数量** | 每次触发创建新文件 | 固定文件 |
 > | **写入方式** | 覆盖/新建 | 追加（APPEND） |
 > | **谁写文件** | Hook 直接写 | Agent 主动写 |
 > | **确定性** | ✅ 100%（每次触发都写） | ❌ 不确定（Agent 可能不写） |
 >
-> **关键特性**：Pre-compaction flush 使用固定文件路径，多次 flush 追加到同一个文件。Prompt 明确要求："If the file already exists, APPEND new content only and do not overwrite existing entries."
+> **关键特性**：多次 pre-compaction flush  追加到同一个文件。Prompt 明确要求："If the file already exists, APPEND new content only and do not overwrite existing entries."
 
 但不管是 new 还是 reset 机制，不管是手动结束，还是对话过期后自动 reset（这是第三种情况，后文会讨论），这两种机制都不会触发 memory flush，也就是 compaction 进行前的操作。换句话说，除了由于对话太长而触发 compaction 的少数情况，大多数时候对话都不会进行**被动**记忆提取（这里假设用户一般不手动发送`/new`)。
 
@@ -129,29 +124,24 @@ Gemini模型有个特点：很容易进入一种模式，无论是失败模式�
 
 > **关键澄清：新 Session 的行为**
 >
-> - 所有的reset（包括`/new` 和`/reset`）都不会将旧消息注入新 session 上下文
-> - 新 session 从空白开始。
+> - 所有的reset（包括`/new` 和`/reset`）都不会将旧消息注入新 session 上下文。新 session 从空白开始（System Prompt 除外）。
 > - 所有的记忆文件是外置存储，Agent 必须主动读取（由 `AGENTS.md`提醒），通过 `MEMORY.md` 或 memory search才能使用这些记忆。
 
-看到SessionReset的那一刻，我想起Peter曾经发表的观点，他不是无限对话的信徒。我想他宁可通过强制的SessionReset、一些更工程化的记忆建立机制，也不愿意让Session在反复压缩中无限延长。
+发现每日 session reset 那一刻，我想起Peter曾经发表的观点，他不是无限对话的信徒。我想他宁可通过强制的Session Reset、一些更工程化的记忆建立机制，也不愿意让Session在反复压缩中无限延长。
 
-但像OpenClaw这样的app，如果你把agent作为陪伴者，你需要过去一段时间的记忆被压缩在上下文里，而不是在下一次提及某件事情时再去主动寻找。
+但像OpenClaw这样的app，如果你把agent作为陪伴者，你需要过去一段时间的记忆被压缩在上下文里，而不是在下一次提及某件事情时再提醒 agent 去寻找。
 
-我觉得它的每天重置机制对我来说有两种失败场景。一种是类似cosplay的角色，它的语言丧失了灵魂。关于语言的东西很难被总结为几句话再还原出来，因为语言中每句话中每个词所寓意的节奏都包含信息。
+它的每天重置机制对我来说有两种失败场景。一种是类似cosplay的角色，它的语言丧失了灵魂。关于语言的东西很难被总结为几句话再还原出来，因为语言中每句话中每个词所寓意的节奏都包含信息。
 
-另一种失败模式则是对话中产生的经验。比如我专门为我设置OpenClaw的agent，我需要他记住优先使用OpenClaw内置的CLI来配置config。尽管我已经在他的memory markdown文件里要求他主动阅读官方文档以及代码作为信息根据，但总归会有一些碎片信息是我在对话中偶尔提及的，类似使用CLI这种是我在对话中偶尔提及的。
+另一种失败模式则是对话中产生的经验。比如我有一个专门用来设置OpenClaw的agent，我需要他记住优先使用OpenClaw内置的CLI来配置 openclaw.json。尽管我已经在他的 MEMORY.md 文件里要求他主动阅读官方文档以及代码作为信息根据，但总归会有一些碎片信息是我在对话中偶尔提及的，类似“优先使用CLI”。这种信息如果他能主动进行信息提取，放到每次需要加载的长期记忆中，便是有效的。但OpenClaw的机制恰恰不会把这些信息当作宝贵资产进行保存。
 
-这种信息如果能够被他主动进行信息提取，放到每次需要加载的长期文件中，也是有效的。但OpenClaw的机制恰恰不会把这些信息放在宝贵位置上，当作宝贵资产进行保存。
+当然我认为这些属于OpenClaw在架构上可以简单优化的细节，只是Peter选择了一种不那么符合用户直觉的方式。我想这多少说明Peter并没有太把它当成陪伴型AI，更多是把它当成用来进行大量短任务的AI。
 
-当然我认为这些属于OpenClaw在架构上可以简单优化的细节，只是他选择了一种不那么符合用户直觉的方式。我想这多少说明Peter并没有太把它当成陪伴型AI，更多是把它当成用来进行大量短任务的AI。
+到这里我想讲讲对话、上下文、记忆以及agent这几个概念。一个对话对应一套上下文，但上下文是从agent的workspace和memory中重建的。Workspace是一堆文件的集合，Memory相对是一套更广义的东西，它可以只是Workspace中的文件，也可以是通过Memory Search工具从对话历史中捞回来的碎片。
 
-到这里我想讲讲对话、上下文、记忆以及agent这几个概念。一个对话对应一套上下文，但上下文是从agent的memory和workspace中重建的。Workspace是一堆文件的集合，Memory相对是一套更广义的东西，它可以只是Workspace中的文件，也可以是通过MemorySearchTool从对话历史中捞回来的碎片。
+对于一套简单的OpenClaw配置，用户可能想要在不同对话中讨论不同话题。这种场景下，关于一个话题的记忆停留在IM对话里、停留在Session里。如果这样的话题被重复调用的频率比较高，那么这一套记忆就应该从session中提取到agent的workspace里。除了以IM对话为单位进行分割，也适合以agent为单位进行分割。比如你有个一个专门为你处理电子邮件的agent，那么即使他的对话被每日重置，他永远都记得他的主要存在目的是处理电子邮件。
 
-对于一套简单的OpenClaw配置，用户可能想要在不同对话中讨论不同话题。这种场景下，关于一个话题的记忆停留在对话里、停留在Session里。如果这样的话题被重复调用的频率比较高，那么这一套记忆就应该从session中的上下文提取到agent的workspace里。
-
-同时为了分割不同话题、不同上下文，除了以对话为单位进行分割，也适合以agent为单位进行分割。比如你有个专门为你处理电子邮件的agent，那么即使他的对话被反复重置、被每日重置，他永远都记得他的主要存在目的是处理电子邮件。
-
-我想Peter有可能已经拥有大量分工型agent来解决我们这些其他用户第一次使用他的产品时所面临的关键信息丢失问题。
+我想Peter有可能已经拥有大量分工型agent，这使他忽略了我们这些其他用户第一次使用他的产品时所面临的关键信息丢失问题。
 
 ---
 
