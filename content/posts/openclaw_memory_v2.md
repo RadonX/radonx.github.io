@@ -82,6 +82,15 @@ OpenClaw最外层是IM工具。把agent想象成一个人：一个人可以有�
 > - 只有 Compaction 会触发 memory flush (即pre-compaction flush）
 > - `/new` 的 session-memory hook 会写入 memory 文件，但不注入上下文
 
+> **关键澄清：新 Session 的行为**
+>
+> - `previousSessionEntry` **只包含元数据**（sessionId, sessionFile, updatedAt, totalTokens 等），**不包含对话内容**
+> - **两者（/new 和 /reset）都不会**将旧消息注入新 session 上下文
+> - 新 session 从空白开始（除了 system prompt），**不会继承旧消息**。除了 system prompt 中定义的 `MEMORY.md` 等长期记忆文件。
+> - `session-memory` hook 读取旧消息用于**生成文件名 slug**，**不会注入新 session 上下文**；这个 hook 会读取前一个 session 的最后 n 条消息（默认 15 条）用于生成描述性的文件名 slug（例如 "config-debugging"），然后将元数据保存到 `memory/YYYY-MM-DD-{slug}.md` 文件。
+> - `/new` 的记忆文件是**外置存储**，需要 Agent 主动读取才能使用
+> - 所有的记忆文件是外置存储，不会自动注入新 session 的上下文。Agent 必须主动读取（通过 `MEMORY.md` 或 `memorySearch`）才能使用这些记忆。
+
 但不管是 new 还是 reset 机制，不管是手动结束，还是对话过期后自动 reset（这是第三种情况，后文会讨论），这两种机制都不会触发 memory flush，也就是 compaction 进行前的操作。换句话说，除了由于对话太长而触发 compaction 的少数情况，大多数时候对话都不会进行**被动**记忆提取（这里假设用户一般不手动发送`/new`)。
 
 这一点我大概在使用OpenClaw四到五天后才意识到。但这时我有个假设：只要在同一个对话里不断与OpenClaw交流，对话总归会被压缩，因此对话里的宝贵信息也总归会被保存下来。
@@ -110,21 +119,8 @@ Gemini模型有个特点：很容易进入一种模式，无论是失败模式�
 > |-----|---------|------------------|---------------------|--------------|
 > | **Daily Reset** | 凌晨自动（默认 04:00） | ✅ 新建 SessionId | ❌ 不触发 | 完全清空，新 session 从空白开始 |
 > | **Idle Reset** | 会话空闲超阈值 | ✅ 新建 SessionId | ❌ 不触发 | 同上 |
-> | 特性 | `/new` | `/reset` |
-> |-----|--------|---------|
-> | SessionId | ✅ 生成新的 UUID | ✅ 生成新的 UUID |
-> | `previousSessionEntry` | ✅ **生成**（元数据快照） | ✅ **生成**（元数据快照） |
-> | session-memory hook | ✅ **触发**（写 memory 文件） | ❌ 不触发 |
-> | 加载旧消息到新上下文 | ❌ **否** | ❌ **否** |
-> | 记忆保存 | ✅ 写入 `memory/YYYY-MM-DD-{slug}.md` | ❌ 不写入 |
 >
-> **关键澄清**：
-> - `previousSessionEntry` **只包含元数据**（sessionId, sessionFile, updatedAt, totalTokens 等），**不包含对话内容**
-> - **两者都不会**将旧消息注入新 session 上下文
-> - 新 session 从空白开始（除了 system prompt），**不会继承旧消息**。除了 system prompt 中定义的 `MEMORY.md` 等长期记忆文件。
-> - `session-memory` hook 读取旧消息用于**生成文件名 slug**，**不会注入新 session 上下文**；这个 hook 会读取前一个 session 的最后 n 条消息（默认 15 条）用于生成描述性的文件名 slug（例如 "config-debugging"），然后将元数据保存到 `memory/YYYY-MM-DD-{slug}.md` 文件。
-> - `/new` 的记忆文件是**外置存储**，需要 Agent 主动读取才能使用
-> - 所有的记忆文件是外置存储，不会自动注入新 session 的上下文。Agent 必须主动读取（通过 `MEMORY.md` 或 `memorySearch`）才能使用这些记忆。
+> **关键发现**：Daily/idle reset 都会创建新 SessionId，但**不会**触发 memory flush。
 
 看到SessionReset的那一刻，我想起Peter曾经发表的观点，他不是无限对话的信徒。我想他宁可通过强制的SessionReset、一些更工程化的记忆建立机制，也不愿意让Session在反复压缩中无限延长。
 
