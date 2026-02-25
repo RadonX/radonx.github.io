@@ -35,8 +35,9 @@ openclaw config set session.resetByType.thread.idleMinutes 10080  # 7天
 
 **说明**：
 - 默认值：1 天（1440 分钟）
-- 你的设置：7 天（10080 分钟）
-- 10080 分钟 = 7 天无活动后才触发 idle reset
+- 你的设置：7 天（10080 分钟）→ 30 天（43200 分钟）
+- `mode: "idle"` 表示**只使用 idle reset**，**不会触发 daily reset**
+- 30 天无活动后才触发 idle reset
 
 **风险避免点**：
 - 避免 idle reset 频繁打断长期对话
