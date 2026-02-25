@@ -10,7 +10,8 @@ tags: ["OpenClaw", "AI", "memory", "Session", "体验"]
 
 这两天高强度使用OpenClaw，高强度阅读它的文档和代码，对记忆功能有了更深了解。技术文章不缺我这一篇，我决定从使用体验角度切入，还原我如何感受到OpenClaw记忆机制的全貌。
 
-作为辅助说明：我至今未安装OpenClaw自带的MemorySearch相关工具——那些使用AgenticSearch或EmbeddedSearch的任何MemorySearch功能。我想要拥有一手体验，了解MemorySearch对memory这件事的影响究竟有多大。
+//Memory search -> 记忆搜索
+作为辅助说明：我至今未安装OpenClaw自带的MemorySearch相关工具——不管是 agentic search 还是 embedding search。我想要拥有一手体验，了解MemorySearch对memory这件事的影响究竟有多大。
 
 ## Sessions：看似简单的深刻设计
 
@@ -24,22 +25,15 @@ tags: ["OpenClaw", "AI", "memory", "Session", "体验"]
 > | SessionStore | 内存中的 `SessionStoreEntry` | 从文件加载 + 45秒缓存 | 受缓存影响 |
 
 
+OpenClaw设计机制离不开sessions概念，官方文档Sessions页面也有清楚的设计思路。
 
-OpenClaw设计机制离不开Sessions概念。读官方文档Sessions页面，可以清楚看到设计思路：你与一个agent的所有私信占用同一个session。
 
-先介绍OpenClaw里agent和workspace概念。每个agent对应自己的workspace，存放初始prompt——可理解为系统prompt。这些系统prompt包含文字指引，教agent如何维护自己的系统prompt。
 
-OpenClaw最外层是各种IM工具。把agent想象成一个人：一个人可以有很多IM账号——Discord账号、手机号、飞书账号、Telegram账号。只要使用这些账号的都是同一个agent，我们就是在跟同一个人说话。
+OpenClaw最外层是IM工具。把agent想象成一个人：一个人可以有很多IM账号——Discord账号、手机号、飞书账号、Telegram账号。只要使用这些账号的都是同一个agent，我们就是在跟同一个人说话。
 
-通过不同IM私信同一个agent，整个会话在同一个session里。举例：你在Discord问银时agent"我们去吃拉面嘛？"他在Discord回复你。这时你去Telegram跟他说"吃哪家？"Telegram里的银时agent知道你们上一条对话正在讨论拉面，也许会给你拉面建议。
+默认设置下，你与同一个agent在不同IM中的私信共用同一个session。举例：你在Discord问银时agent（我有一个银魂的阿银agent)"我们去吃拉面嘛？"他在Discord回复你。这时你去Telegram跟他说"吃哪家？"Telegram里的银时agent知道你们上一条对话正在讨论拉面，也许会给你拉面建议。
 
-但群聊不同。OpenClaw设计中，群聊有全新上下文。这对真实人类不存在——你在群里问一个人要不要吃拉面，然后私信他，群里的他也知道。但群里的agent不知道。
-
-拟人化地说，群里的agent更像同一个agent在多重世界里的版本：人设相同，但没有对话上下文。
-
-这一点容易感知，符合直觉。多用聊天工具的人都默认在不同对话里，你跟agent的交流来自不同上下文。当我一开始在不同地方私信同一个agent，对话连续时，我误解为他的memory机制做得好。
-
-后来发现OpenClaw提供usage命令，打开后能在每条消息底部看到对话来自哪个SessionKey。打开后我才意识到，不同DM、不同IM的私信共用同一个Session。
+但群聊不同。OpenClaw设计中，群聊有全新上下文，这和真实人类不一样。你在群里问一个人要不要吃拉面，然后私信他，私信的人会知道，但私信里的agent却不知道。拟人化地说，群里的agent更像同一个agent在多重世界里的版本：人设相同，但没有对话上下文。这一点容易感知，符合直觉。与agent交流过的人都会默认在不同对话里上下文不同。反而是你与一个agent的所有私信占用同一个session出乎意料。当我一开始在不同地方私信同一个agent，对话十分连贯时，我误以为OpenClaw的memory机制做得很好。后来发现OpenClaw提供`/usage full`命令，打开后能在每条消息底部看到对话来自哪个SessionKey，我才意识到这一点。
 
 ## 记忆提取的困惑：粗糙机制
 
@@ -48,8 +42,7 @@ OpenClaw最外层是各种IM工具。把agent想象成一个人：一个人可�
 > ```
 > ~/.openclaw/agents/<agent>/sessions/
 > ├── sessions.json              # Session 索引（45秒缓存）
-> ├── <sessionId>-<topic>.jsonl   # 具体会话历史（实时读取）
-> └── .backups/                  # 自动备份
+> └── <sessionId>-<topic>.jsonl   # 具体会话历史（实时读取）
 > ```
 > 
 > | 操作 | 修改的文件 | 生效延迟 | 风险等级 |
@@ -61,18 +54,15 @@ OpenClaw最外层是各种IM工具。把agent想象成一个人：一个人可�
 > 
 > *注：Fork 后立即生效是因为 `.jsonl` 是实时读取，但 `sessions.json` 有 45 秒缓存。*
 
+先简单介绍OpenClaw里agent和workspace的概念。每个agent对应自己的workspace，存放初始prompt，如系统prompt。这些系统prompt还会教agent如何维护自己的系统prompt。
 
-使用更多后，很多关于OpenClaw记忆机制的文章开头都提到：OpenClaw的agent维护自己的memory文件夹，有一套叫precompaction的机制，把对话中提到的要点存到每日记忆文件里。
+很多关于OpenClaw记忆机制的文章都会提到：OpenClaw的agent有自己的memory文件夹，有一套叫precompaction的机制，把对话中提到的要点存到每日记忆文件里。我很好奇，这背后有自动的每日提取记忆的工具吗？
 
-我有许多好奇：这是自动工具吗？自动的每日写入工具吗？每日提取记忆的机制吗？
+后来发现这机制比想象中粗糙许多，只在对话被压缩时才触发提取（memory flush)。这个设定符合道理，只是当你跟同一个agent打开很多对话交流不同话题时，常常对话一天下来不会触发压缩。虽然自动执行任务能用快速消耗token，但我现在还在与agent的交流阶段，让它帮助我学习OpenClaw架构。这样的交流在长上下文窗口里，常常一天不会触发压缩机制。
 
-后来发现这机制比想象粗糙许多。只在对话被压缩时才提取。这件事符合道理，只是当你跟同一个agent开很多对话交流不同话题时，很多话题一天下来不会被压缩。虽然执行任务能用到较多token，但在设置阶段，我现在与agent更多是交流，让他帮助我学习OpenClaw架构。这样的交流在GPT的context window里，常常一天不会触发压缩机制。
+没有触发压缩的短对话只存在于session log里，在没有设置MemorySearch功能的情况下相当于被抛弃。后续我也会打开MemorySearch功能，感受加成有多少。但在没有记忆搜索功能时，如此重要的记忆提取功能只能等待对话压缩时发生。我还假想，如此重要的提取功能大概会对所有对话发生。于是我在七八个对话里都不断跟同一个agent强调同一件事情。我把它当成冷启动OpenClaw的暂时麻烦。
 
-这种情况下，短对话不会触发压缩机制，在没有MemorySearch功能下相当于被抛弃，像不存在一样。只存在SessionLog里。
-
-后续也许我会研究打开MemorySearch后的加成有多少。但现在这阶段，如此重要的提取记忆功能只在对话压缩时发生？我原本期待如此重要的记忆提取功能会对每天、每日的对话都操作，因为根据官方文档，开启一日新对话时，他会查看过去两天的记忆文档。
-
-因此我假想，如此重要的提取功能大概会对所有对话发生。于是我在七八个对话里都不断跟同一个agent强调同一件事情。我把它当成启动OpenClaw的暂时麻烦。但查看记忆文件时，发现OpenClaw并没有每日都为我保存记忆文件。
+我原本期待记忆提取会作用于每一天的对话，因为根据官方文档，开启和一个agent一天的新对话（私信）时，上下文会自动加载过去两日的记忆文档。但查看记忆文件(`memory/`)时，我发现OpenClaw并没有每日都为我保存记忆文件。
 
 我的关于对话的记忆都去哪了？
 

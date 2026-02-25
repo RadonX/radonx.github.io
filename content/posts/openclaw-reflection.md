@@ -2,6 +2,7 @@
 title: "我与OpenClaw：从拒绝到皈依"
 date: 2026-02-09T11:30:00-08:00
 draft: false
+slug: "openclaw-reflection"
 tags: ["AI", "OpenClaw", "vibe-coding", "程序员"]
 ---
 
