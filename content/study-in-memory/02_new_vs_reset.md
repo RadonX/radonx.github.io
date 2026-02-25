@@ -109,6 +109,110 @@ OpenClaw 的 hook 系统区分：
 | memory 文件会自动加载到新 session 吗？ | ❌ 不会。Agent 必须主动读取（MEMORY.md 或 memorySearch） | 以为写入 memory 就会自动出现在上下文中 |
 | daily reset 会自动写 daily logs 吗？ | ❌ 不会（见 Pt.1） | 把 daily reset 当成 daily logs 生成器 |
 
+---
+
+## 2026-02-24 更新：关键发现的总结
+
+### 1. 所有 Reset 机制都会创建新 SessionId
+
+**错误认知**: "reset 应该不会新建 SessionID"
+
+**正确答案**: ✅ **所有 reset 机制都会创建新 SessionId**
+
+| 机制 | 创建新 SessionId | 触发 `resetTriggered` | 创建 `previousSessionEntry` |
+|------|-----------------|---------------------|---------------------------|
+| `/new` | ✅ 是 | ✅ 是 | ✅ 是 |
+| `/reset` | ✅ 是 | ✅ 是 | ✅ 是 |
+| Daily reset | ✅ 是 | ✅ 是 | ✅ 是 |
+| Idle reset | ✅ 是 | ✅ 是 | ✅ 是 |
+
+### 2. previousSessionEntry 的本质（代码证据）
+
+**代码位置**: `src/auto-reply/reply/session.ts:213`
+
+```typescript
+const previousSessionEntry = resetTriggered && entry ? { ...entry } : undefined;
+```
+
+**包含内容**:
+- ✅ sessionId（旧的）
+- ✅ sessionFile（路径）
+- ✅ updatedAt（时间戳）
+- ✅ totalTokens（token 统计）
+- ✅ modelOverride, providerOverride（用户设置）
+- ❌ **不包含任何消息内容**
+
+**用途**:
+1. 触发 `session_end` hook（旧会话）
+2. 触发 `session_start` hook（新会话，带 `resumedFrom` 参数）
+3. 让 `session-memory` hook 能找到旧 `.jsonl` 文件路径
+4. 归档旧 transcript（`archiveSessionTranscripts`）
+
+### 3. session-memory hook 不会注入上下文（代码证据）
+
+**代码位置**: `src/hooks/bundled/session-memory/handler.ts:226-283`
+
+**工作流程**:
+```typescript
+// 1. 读取旧消息（用于生成 slug）
+sessionContent = await getRecentSessionContentWithResetFallback(sessionFile, messageCount);
+
+// 2. 调用 LLM 生成 slug
+slug = await generateSlugViaLLM({ sessionContent, cfg });
+
+// 3. 直接写文件
+await fs.writeFile(memoryFilePath, entry, "utf-8");
+```
+
+**关键点**:
+- Hook 的输出**不会返回**给主流程
+- Hook 执行是 `void`（fire-and-forget）
+- 生成的 memory 文件**不会被注入**新 session 的上下文
+
+### 4. 新 Session 从空白开始
+
+**代码位置**: `src/auto-reply/reply/session.ts:441-464`
+
+```typescript
+// Fire session_start for the new session
+void hookRunner.runSessionStart(
+  { sessionId: effectiveSessionId, resumedFrom: previousSessionEntry?.sessionId },
+  ...
+).catch(() => {});
+```
+
+**关键点**:
+- 新 session 的上下文是**空白**的（除了 system prompt）
+- **不会**加载旧 session 的消息
+- **不会**加载 `memory/YYYY-MM-DD-*.md` 文件
+- 持续性需要**显式的 Agent 设计**（MEMORY.md, memorySearch）
+
+### 5. 为什么对话重置不容易察觉？
+
+**错误认知**: "系统会自动加载旧对话"
+
+**正确答案**:
+1. **AI 可以重新收集信息**：从少量提示重建上下文
+2. **IM 引用很方便**：引用前一轮对话、提醒进度
+3. **高质量的对话容易还原**：明确的目标和上下文
+
+**但这不是**因为系统自动加载了旧对话，而是因为 AI 的推理能力。
+
+---
+
+## 这一篇的"纠错点"（对素材的审核结论）
+
+这份素材里混入了大量"探索过程中的中间结论"，其中最需要纠正的是：
+
+- "previousSessionEntry 包含最后 N 条消息" —— **错**（只包含元数据）
+- "session-memory hook 会注入上下文" —— **错**（只写文件，不注入）
+- "/reset 不会创建新 sessionId" —— **错**（会创建）
+- "新对话会加载旧对话的最后 N 条" —— **错**（不会加载）
+
+我在 PR 里会把它们改成上面的"reset 同义、hook 不同义、元数据不等于消息内容"的表述。
+
+下一篇（Pt.3）会专门列出：OpenClaw 的 hook 事件有哪些、哪些常被误以为存在但其实不存在，以及如何把 hook 用在"可控的自动化桥接"上。
+
 ## 对当前素材的审核结论（需要修改点）
 
 这份素材里混入了大量"探索过程中的中间结论"，其中最需要纠正的是：
