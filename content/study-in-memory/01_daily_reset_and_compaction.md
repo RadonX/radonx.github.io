@@ -207,15 +207,20 @@ compaction 的核心特征：
 - 会在 JSONL 历史里写入一条"摘要（summary）"或等价条目
 - 目标是减少"当前上下文窗口里需要塞的 tokens"，不是为了切割 session
 
+**重要澄清**：
+- Compaction **不会**将旧对话"写入记忆文件"
+- Compaction **不会**触发 session-memory hook
+- 记忆保存只能在 **pre-compaction flush**（压缩前）或 **`/new` 命令**时发生
+
 ### "短对话永远不触发 compaction"会怎样？
 
-是的，短对话可能从不触发 compaction。
+是的，短对话可能从不触发 compaction（因此也不会触发 pre-compaction flush）。
 
 但这不是 bug：compaction 是应对"上下文快满"的策略。
 
 如果你想让短对话也能形成 durable memory，应该靠：
 
-- **显式 /new（触发 session-memory hook 写盘）**
+- **显式 /new（触发 session-memory hook 写盘）** ← **唯一可靠的方式**
 - 或者把重要结论写进你的外置知识库（Obsidian/LogSeq/仓库）并让 OpenClaw 的 memory_search 能索引到
 
 ## 这一篇的"纠错点"（对素材的审核结论）
