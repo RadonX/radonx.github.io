@@ -69,23 +69,47 @@ OpenClaw最外层是IM工具。把agent想象成一个人：一个人可以有�
 ## 发现对话被重置的那一刻
 
 > **技术背景：Reset vs Compaction 机制对照表**
-> 
+>
 > | 机制 | 触发条件 | 是否换新 SessionId | 是否触发 Memory Flush | 对上下文的影响 |
 > |-----|---------|------------------|---------------------|--------------|
-> | **Daily Reset** | 凌晨自动 / `idleTimeout` | ✅ 新建 SessionId | ❌ 不触发 | 完全清空，加载 `previousSessionEntry` |
+> | **Daily Reset** | 凌晨自动（默认 04:00） | ✅ 新建 SessionId | ❌ 不触发 | 完全清空，新 session 从空白开始 |
 > | **Idle Reset** | 会话空闲超阈值 | ✅ 新建 SessionId | ❌ 不触发 | 同上 |
-> | **Manual /new** | 用户发送 `/new` | ✅ 新建 SessionId | ✅ **触发** | 先 Flush 到 memory/，再换 Session |
-> | **Manual /reset** | 用户发送 `/reset` | ❌ 保留 SessionId | ❌ 不触发 | 原地清空，保留 Session |
-> | **Compaction** | Context Window 接近上限 | ❌ 保留 SessionId | ✅ **触发** | 压缩历史，生成摘要 |
+> | **Manual /new** | 用户发送 `/new` | ✅ 新建 SessionId | ✅ **触发**（写 memory 文件） | 新 session 从空白开始（记忆是外置存储） |
+> | **Manual /reset** | 用户发送 `/reset` | ✅ 新建 SessionId | ❌ 不触发 | 同上 |
+> | **Compaction** | Context Window 接近上限 | ❌ 保留 SessionId | ✅ **触发**（pre-compaction flush） | 压缩历史，生成摘要 |
+>
+> **关键发现**：
+> - 所有 Reset（daily/idle/manual）**都不会**将旧消息注入新 session
+> - 只有 Compaction 和 pre-compaction flush 会触发 memory flush
+> - `/new` 的 session-memory hook 写入**外置存储**，不注入上下文
+> - 新 session 总是从空白开始（除了 system prompt）
+
+
+我不辞辛苦追问他，让他读文档、读代码。这里发现OpenClaw有两种，除了compaction之外还有两种路径：使用OpenClaw自带的new command和reset command。
+
+> **技术背景：`/new` vs `/reset` 机制对比**
 > 
-> *关键发现：只有 Compaction 和 `/new` 会触发 memory flush，Daily/Idle Reset 不会。*
+> | 特性 | `/new` | `/reset` |
+> |-----|--------|---------|
+> | **创建新 SessionId** | ✅ 是 | ✅ 是 |
+> | **触发 `previousSessionEntry`** | ✅ 是 | ✅ 是 |
+> | **触发 session-memory hook** | ✅ 是 | ❌ 否 |
+> | **加载旧消息到新上下文** | ❌ **否** | ❌ **否** |
+> 
+> **关键澄清**：
+> - `previousSessionEntry` **只包含元数据**（sessionId, sessionFile, updatedAt, totalTokens 等），**不包含对话内容**
+> - `session-memory` hook 读取旧消息用于**生成文件名 slug**，**不会注入新 session 上下文**
+> - 新 session 从空白开始（除了 system prompt），**不会继承旧消息**
 
+**修正后的理解**：
 
-我不辞辛苦追问他，让他读文档、读代码。这里发现OpenClaw有两种，除了compaction之外还有两种路径：使用OpenClaw自带的new command和reset command。这两者都会触发，不完全是同一次。首先new会新建SessionID，reset应该不会。其次new会触发previoussessionentry，加载前一个session的最后n条消息。这里的n可以设置。
+两者都会触发 reset（创建新 SessionId），但只有 `/new` 会触发 `session-memory` hook。这个 hook 会读取前一个 session 的最后 n 条消息（默认 15 条）用于生成描述性的文件名 slug（例如 "config-debugging"），然后将元数据保存到 `memory/YYYY-MM-DD-{slug}.md` 文件。
 
-我不太记得他加载这N条消息做什么，有可能只是生成总结用来开启下一个对话。我也不记得reset是否也会使用这最后N条消息。
+**关键点**：这个记忆文件是**外置存储**，不会自动注入新 session 的上下文。Agent 必须主动读取（通过 `MEMORY.md` 或 `memorySearch` skill）才能使用这些记忆。
 
-但这两种机制，当你手动结束对话，或因为当前对话过期OpenClaw自动新建对话——这是第三种情况——这三种情况都不会触发memoryflush，也就是compaction之前进行的操作。
+至于 `/reset`，它同样会创建 `previousSessionEntry`（旧 session 的元数据快照），但不会触发 session-memory hook，因此不会写入 memory 文件。
+
+但这两种机制，当你手动结束对话，或因为当前对话过期OpenClaw自动新建对话——这是第三种情况——这三种情况中，**只有 `/new` 会触发 memory flush**，daily/idle reset 和 `/reset` 都不会。
 
 也就是说，只有在比较稀有的、由于对话太长而触发compaction机制时，大多数时候你在对话里聊的话题都不会被保存下来。
 
@@ -99,7 +123,22 @@ OpenClaw最外层是IM工具。把agent想象成一个人：一个人可以有�
 
 比如我有个专门配置OpenClaw的Bot，它的Session里都是它对OpenClaw框架的理解。尽管我在这个bot的system parameter里已经教导他如何查看官方文档和代码，但我还是希望当我已经琢磨OpenClaw的memory到hook的程序时，我能够不需要反复进行这一轮探索来进行更深提问。
 
-由于对话的不透明性，以及他在新建对话时会加载前一个对话最后的、总结后的对话，对话被reset后不那么容易被察觉。或者说你无法判断那个是AI的幻觉还是什么，因为有时AI至少可以重新收集信息来还原你在前一轮对话中想做的事情。另外在IM中你引用前一轮对话、提醒AI你们的进度也非常容易。如果前几轮恰巧有高质量对话，很容易还原。
+由于对话的不透明性，对话被reset后其实并不是那么容易被察觉。
+
+> **技术澄清：为什么对话重置不容易察觉**
+>
+> 我之前错误地认为"新建对话时会加载前一个对话最后的、总结后的对话"。**这也是错误的**。
+>
+> 经过代码验证，新对话**不会加载前一个对话的任何内容**（除了 system prompt 中定义的 `MEMORY.md` 等长期记忆文件）。
+>
+> 对话重置不容易察觉的真正原因是：
+> 1. **AI 可以重新收集信息**：当你提醒 AI "我们之前在讨论 X" 时，它可以根据这个提示重新开始对话
+> 2. **IM 引用很方便**：在 Telegram/Discord 中引用前一轮对话、提醒 AI 进度非常容易
+> 3. **高质量的对话容易还原**：如果前几轮对话有明确的目标和上下文，AI 可以快速"找回状态"
+>
+> 但这**不是**因为系统自动加载了旧对话，而是因为 AI 的推理能力能够从少量提示中重建上下文。
+
+或者说你无法判断那个是AI的幻觉还是什么，因为有时AI至少可以重新收集信息来还原你在前一轮对话中想做的事情。另外在IM中你引用前一轮对话、提醒AI你们的进度也非常容易。如果前几轮恰巧有高质量对话，很容易还原。
 
 我在使用一周后才注意到对话被重置了。
 
@@ -112,16 +151,20 @@ Gemini模型有个特点：很容易进入一种模式，无论是失败模式�
 ## 对"陪伴型AI"的反思
 
 > **技术背景：`/new` vs `/reset` 核心差异**
-> 
-> | 特性 | `/new`（同义词） | `/reset`（重置） |
-> |-----|----------------|----------------|
-> | SessionId | 生成新的 UUID | 保留原 SessionId |
-> | `previousSessionEntry` | ✅ **生成**（包含前会话最后 N 条） | ❌ 不生成 |
-> | Memory Flush 钩子 | ✅ **触发** | ❌ 不触发 |
-> | `resetTriggered` 标记 | `true` | `true` |
-> | 使用场景 | 主动保存记忆、开启新上下文 | 快速清空、不保存 |
-> 
-> *关键：`/new` 会触发 `command:new` 钩子，将当前会话保存到 `memory/YYYY-MM-DD-{slug}.md`；`/reset` 不会。*
+>
+> | 特性 | `/new` | `/reset` |
+> |-----|--------|---------|
+> | SessionId | ✅ 生成新的 UUID | ✅ 生成新的 UUID |
+> | `previousSessionEntry` | ✅ **生成**（元数据快照） | ✅ **生成**（元数据快照） |
+> | session-memory hook | ✅ **触发**（写 memory 文件） | ❌ 不触发 |
+> | 加载旧消息到新上下文 | ❌ **否** | ❌ **否** |
+> | 记忆保存 | ✅ 写入 `memory/YYYY-MM-DD-{slug}.md` | ❌ 不写入 |
+>
+> **关键澄清**：
+> - `previousSessionEntry` **只包含元数据**（sessionId, sessionFile, updatedAt, totalTokens 等），**不包含对话内容**
+> - **两者都不会**将旧消息注入新 session 上下文
+> - 新 session 从空白开始（除了 system prompt），**不会继承旧消息**
+> - `/new` 的记忆文件是**外置存储**，需要 Agent 主动读取才能使用
 
 
 看到SessionReset的那一刻，我想起Peter曾经发表的观点，他不是无限对话的信徒。我想他宁可通过强制的SessionReset、一些更工程化的记忆建立机制，也不愿意让Session在反复压缩中无限延长。
