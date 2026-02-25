@@ -1,17 +1,16 @@
 ---
-title: "OpenClaw记忆机制体验：一次缓慢的觉醒"
+title: "你的OpenClaw经常失忆吗？七日记忆之困，深入OpenClaw记忆机制"
 date: 2026-02-24T00:00:00-08:00
 draft: true
 slug: "openclaw-memory-mechanism"
 tags: ["OpenClaw", "AI", "memory", "Session", "体验"]
 ---
 
-# OpenClaw记忆机制体验：一次缓慢的觉醒
+# 你的OpenClaw经常失忆吗？七日记忆之困，深入OpenClaw记忆机制
 
 这两天高强度使用OpenClaw，高强度阅读它的文档和代码，对记忆功能有了更深了解。技术文章不缺我这一篇，我决定从使用体验角度切入，还原我如何感受到OpenClaw记忆机制的全貌。
 
-//Memory search -> 记忆搜索
-作为辅助说明：我至今未安装OpenClaw自带的MemorySearch相关工具——不管是 agentic search 还是 embedding search。我想要拥有一手体验，了解MemorySearch对memory这件事的影响究竟有多大。
+作为辅助说明：我至今未安装OpenClaw自带的memory search相关工具——不管是 agentic search 还是 embedding search。我想要拥有一手体验，了解memory search对memory这件事的影响究竟有多大。
 
 ## Sessions：看似简单的深刻设计
 
@@ -55,7 +54,7 @@ OpenClaw最外层是IM工具。把agent想象成一个人：一个人可以有�
 
 后来发现这机制比想象中粗糙许多，只在对话被压缩时才触发提取（memory flush)。这个设定符合道理，只是当你跟同一个agent打开很多对话交流不同话题时，常常对话一天下来不会触发压缩。虽然自动执行任务能用快速消耗token，但我现在还在与agent的交流阶段，让它帮助我学习OpenClaw架构。这样的交流在长上下文窗口里，常常一天不会触发压缩机制。
 
-没有触发压缩的短对话只存在于session log里，在没有设置MemorySearch功能的情况下相当于被抛弃。后续我也会打开MemorySearch功能，感受加成有多少。但在没有记忆搜索功能时，如此重要的记忆提取功能只能等待对话压缩时发生。我还假想，如此重要的提取功能大概会对所有对话发生。于是我在七八个对话里都不断跟同一个agent强调同一件事情。我把它当成冷启动OpenClaw的暂时麻烦。
+没有触发压缩的短对话只存在于session log里，在没有设置memory search功能的情况下相当于被抛弃。后续我也会打开memory search功能，感受加成有多少。但在没有记忆搜索功能时，如此重要的记忆提取功能只能等待对话压缩时发生。我还假想，如此重要的提取功能大概会对所有对话发生。于是我在七八个对话里都不断跟同一个agent强调同一件事情。我把它当成冷启动OpenClaw的暂时麻烦。
 
 我原本期待记忆提取会作用于每一天的对话，因为根据官方文档，开启和一个agent一天的新对话（私信）时，上下文会自动加载过去两日的记忆文档。但查看记忆文件(`memory/`)时，我发现OpenClaw并没有每日都为我保存记忆文件。
 
