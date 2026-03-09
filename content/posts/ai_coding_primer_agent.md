@@ -1,4 +1,13 @@
+---
+title: "Agentic Coding 的幕后机制：写给初学者的架构指南"
+date: 2026-03-09T00:05:00-07:00
+draft: false
+author: "磨坊主大人"
+tags: ["AI", "Agent", "Architecture", "LLM", "MCP"]
+---
+
 # Agentic Coding 的幕后机制：写给初学者的架构指南
+
 
 **谁应该读这篇文章？** 如果你了解过 coding CLI 的基本架构，请直接跳过本文，本文是我写给同事的入门文。直接阅读话题二：如何与 LLM "共情"以有效驱动它。本文面向刚接触 agentic coding 的读者，也是我刚开始使用 coding CLI 时的疑惑。
 

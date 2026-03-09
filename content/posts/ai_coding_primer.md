@@ -1,4 +1,13 @@
+---
+title: "与 LLM 共舞：Agentic Coding 的驾驭之道"
+date: 2026-03-09T00:05:00-07:00
+draft: false
+author: "磨坊主大人"
+tags: ["AI", "LLM", "Agent", "Coding", "Prompt"]
+---
+
 # 与 LLM 共舞：Agentic Coding 的驾驭之道
+
 
 你不需要理解 LLM 的原理，但你必须理解它的脾性。这篇文章写给所有正在用 AI 写代码的人——无论你刚刚开始，还是已经用了很久。
 
