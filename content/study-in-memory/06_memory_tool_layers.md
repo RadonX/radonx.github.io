@@ -1,0 +1,363 @@
+---
+title: "A Study in Memory, Pt. 6: Memory Tool Layers"
+date: 2026-03-17T00:33:00-07:00
+draft: false
+slug: "memory-tool-layers"
+tags: ["OpenClaw", "Memory", "Architecture", "Agent Design"]
+---
+
+# 记忆工具分层：为什么不是“谁更强”，而是“谁该在第几层”
+
+前几篇我们一直在讨论 OpenClaw 的 session、reset、compaction、memory flush，以及“为什么长期记忆不能等同于长会话”。
+
+这一篇要进一步解决一个更容易混乱的问题：
+
+> 面对 Nocturne、lossless-claw、QMD、ClawDB、Sirchmunk、MemOS 这类工具时，应该怎么判断它们各自处在什么层？
+
+很多争论并不是“谁对谁错”，而是把不同职责的工具拿到同一个维度比较了。
+
+这篇文章采用一个固定方法论来梳理：
+
+**scan → structure → deep dive → context → elegance → thinking pattern → problem reframing → cross-domain transfer → formal clarification → generalization**
+
+---
+
+## 1) scan：先扫清“memory”这个词里其实混了几件事
+
+在 agent 系统里，“memory”这个词至少混杂了三类完全不同的问题：
+
+1. **Identity / Constitution**
+   - 我是谁？
+   - 我遵守什么原则？
+   - 用户有哪些长期偏好、禁忌、约定？
+
+2. **Conversation Trace**
+   - 我们之前聊过什么？
+   - 上周那个 bug 的结论是什么？
+   - 哪个报错、哪个截图、哪条决定是谁提的？
+
+3. **Knowledge Evidence**
+   - 我写过什么文档？
+   - 某个配置细节在哪篇笔记？
+   - 这个结论能不能回到原文和引用？
+
+如果不先把这三类问题拆开，任何“记忆系统”最终都会走向混乱：
+
+- 用 RAG 充当人格
+- 用摘要充当事实
+- 用相似度召回充当长期约束
+
+---
+
+## 2) structure：分层不是增加复杂度，而是给每个问题一个固定位置
+
+基于上面的拆分，一个更清晰的结构是：
+
+- **L0：Identity / Sovereign Memory**
+  - 处理身份、原则、偏好、禁忌、情境触发
+  - 它不是“检索器”，而是“路由器/裁判”
+
+- **L3：Conversation / Runtime Trace**
+  - 处理对话轨迹的可回溯性
+  - 但这一层必须继续拆成两类：
+    - **L3a：Context Engine**（上下文组装/压缩策略）
+    - **L3b：Memory Backend**（`memory_search` / `memory_get` 的后端实现）
+
+- **L2：Local Knowledge Evidence**
+  - 处理本地知识库、文档库、笔记库的证据检索
+  - 核心要求不是“会总结”，而是“能给引用”
+
+- **L1：Web Evidence**
+  - 处理外网检索
+  - 应当是最后升级路径，而不是默认入口
+
+这里最关键的一步是：
+
+> **L3 必须拆成 L3a 和 L3b。**
+
+如果不拆，你就会把“上下文管理”和“记忆后端”混在一起，最后得到一个既吵、又贵、又不可调试的系统。
+
+---
+
+## 3) deep dive：每一层真正应该暴露什么接口？
+
+分层一旦停留在“概念”层面，很快就会再次混乱。要让它可执行，每层都需要最小接口契约。
+
+### L0：Identity / Sovereign Memory
+
+输入：情境、任务、触发条件  
+输出：约束、偏好、禁止项、路由建议  
+失败模式：宁可不触发，也不要污染人格
+
+### L3a：Context Engine
+
+输入：当前会话历史  
+输出：当轮 prompt context 的组装结果  
+失败模式：可能牺牲 cache 复用，可能引入动态重写成本
+
+### L3b：Memory Backend
+
+输入：`memory_search(query)` / `memory_get(path)`  
+输出：可追溯的记忆片段  
+失败模式：找不到就返回空，不应自动“想办法补全”
+
+### L2：Knowledge Evidence
+
+输入：query + 可选过滤器  
+输出：`path + snippet + position` 这种证据项  
+失败模式：宁可空，也不要“先生成答案再补来源”
+
+### L1：Web Evidence
+
+输入：外部 query  
+输出：URL + 摘要 + 不确定性提示  
+失败模式：失败就停，不应强行编造成事实
+
+---
+
+## 4) context：把现有工具放回它们真正该在的位置
+
+现在把常见的“记忆工具”放回这套结构里，很多争论会瞬间消失。
+
+### Nocturne Memory → L0
+
+它解决的问题是：
+
+- 身份
+- 原则
+- 偏好
+- disclosure 条件唤醒
+- CRUD + 快照回滚 + 审计
+
+这决定了它不是“检索器”，而是“主权记忆层”。
+
+它的价值不在于更强检索，而在于：
+
+> 不再让人格、原则、偏好寄生在相似度检索上。
+
+所以 Nocturne 的正确位置只能是 **L0**。
+
+---
+
+### lossless-claw → L3a
+
+lossless-claw 的核心是：
+
+- 持久化消息
+- DAG 摘要
+- context assembly
+- `lcm_grep / lcm_expand`
+
+它的强项是“让旧上下文不被简单截断”。
+
+但它的代价也非常明确：
+
+- 每轮都参与 context assembly
+- prompt 结构变成动态拼装
+- prefix 稳定性下降
+- KV/prompt cache 复用变差
+
+所以它不是通用“记忆后端”，而是 **L3a：上下文引擎**。
+
+---
+
+### memory-core / QMD / ClawDB → L3b
+
+这三者的共同点是：
+
+它们都在回答同一个问题——
+
+> 当 agent 调 `memory_search` / `memory_get` 时，到底去哪查？
+
+- **memory-core**：默认后端，本地 Markdown + SQLite 索引
+- **QMD**：本地 sidecar，BM25 + 向量 + rerank
+- **ClawDB**：服务化后端，WAL/Parquet/DataFrame、背压、隔离、签名路由
+
+注意：
+
+QMD 和 ClawDB 表面看风格差别很大，一个偏本地搜索器，一个偏服务化后端；但从 OpenClaw 的抽象层看，它们都属于 **L3b**，因为它们都在实现同一对工具接口。
+
+---
+
+### Sirchmunk → L2
+
+Sirchmunk 代表的是另一种范式：
+
+- Agentic Search
+- FAST / DEEP
+- query rewriting
+- evidence sampling
+- summarization / rerank
+
+它不是纯粹的索引器，而是“把检索当成 agent 行为序列”。
+
+但它最重要的约束也很清晰：
+
+- **需要 LLM API**（哪怕是本地 OpenAI-compatible endpoint）
+- FAST 也不是“零 LLM”
+- 输出如果不能稳定变成“引用证据”，就不能进入事实链
+
+所以它更适合放在 **L2：本地知识证据检索**，而不是 L3。
+
+---
+
+### MemOS Cloud Plugin → 不适合作为默认层，而更像“自动 recall 注入器”
+
+MemOS Cloud Plugin 的典型生命周期是：
+
+- `before_agent_start` → `/search/memory` → 注入 recall block
+- `agent_end` → `/add/message` → 写回
+
+它的重点不是“放在哪一层”，而是它采用了一种特定策略：
+
+> **每次运行前都自动翻旧账。**
+
+这件事对某些产品化陪伴型 AI 是合理的；但如果你的目标是：
+
+- 可预测
+- 不吵
+- cache-friendly
+- 默认不自动注入
+
+那它就不适合做默认路线。
+
+---
+
+## 5) elegance：什么才叫“优雅的记忆系统”？
+
+优雅不是“功能多”，而是：
+
+### A. 默认不吵
+不应该每轮都自动拉历史、自动塞 recall block、自动改写上下文。
+
+### B. 默认可解释
+每次 recall 都应该能回答：
+
+- 为什么现在查？
+- 查到了什么？
+- 证据在哪？
+
+### C. 默认 cache-friendly
+如果你的系统每轮都重写 prompt 结构，它就天然更贵、更慢、更难调试。
+
+### D. 默认可审计
+人格层（L0）尤其如此：
+
+- 约束是谁写进去的？
+- 何时改过？
+- 能不能回滚？
+
+如果按这四条评估，一个更优雅的默认策略其实很简单：
+
+> **L0 先决定约束；L3b 只在需要时被调用；L2 只在需要文档证据时被调用；L1 最后补外网。**
+
+---
+
+## 6) thinking pattern：每种工具背后的思想模型不同
+
+一旦你看清每个工具背后的“thinking pattern”，很多误用就会自动消失。
+
+### Nocturne 的 thinking pattern
+“记忆首先是主权与身份。”
+
+### lossless-claw 的 thinking pattern
+“记忆首先是上下文压缩问题。”
+
+### QMD / ClawDB 的 thinking pattern
+“记忆首先是检索后端与工程可靠性问题。”
+
+### Sirchmunk 的 thinking pattern
+“检索首先是一种可自适应的 agent 行为，而不是一次数据库查询。”
+
+它们都对，但它们回答的是不同问题。
+
+---
+
+## 7) problem reframing：不要再问“哪个更强”，要问“它该放在哪层”
+
+大多数记忆工具比较文章都会问：
+
+- 哪个效果更好？
+- 哪个更聪明？
+- 哪个更像长期记忆？
+
+这其实问错了。
+
+更好的问题是：
+
+1. 它解决的是 **identity / trace / evidence / web** 中的哪一类？
+2. 它默认是 **自动注入** 还是 **按需工具调用**？
+3. 它输出的是 **答案** 还是 **证据**？
+4. 它的代价是 **cache、可解释性、审计性、部署复杂度** 中的哪一项？
+
+一旦问题这样重写，分层就会自然浮现出来。
+
+---
+
+## 8) cross-domain transfer：这套方法不仅适用于 OpenClaw
+
+这套“先分层、再放工具”的方法，不只是 OpenClaw 可以用。
+
+任何 agent 系统，只要遇到以下现象，都适用：
+
+- 大家把“记忆”说成一个词，但实际在讨论三四件不同的事
+- RAG、prompt cache、vectorDB、memory plugin、knowledge graph 被混在一起
+- 工具越来越多，但行为越来越不可解释
+
+在这些场景下，你都可以用同一套步骤：
+
+- 先拆 Identity / Trace / Evidence / Web
+- 再看每个工具接在哪个接口上
+- 再决定默认策略是否自动注入
+
+---
+
+## 9) formal clarification：给出一个严谨而可执行的定义
+
+基于上面的分析，可以得到一个清晰定义：
+
+### L0
+负责人格、原则、偏好、禁忌与条件唤醒。  
+代表：**Nocturne**
+
+### L3a
+负责上下文压缩与动态组装。  
+代表：**lossless-claw**
+
+### L3b
+负责 `memory_search` / `memory_get` 的后端实现。  
+代表：**memory-core / QMD / ClawDB**
+
+### L2
+负责本地知识与文档证据检索。  
+代表：**Sirchmunk**（候选）
+
+### L1
+负责外网证据补充。  
+代表：**tavily-search** 等
+
+---
+
+## 10) generalization：最终建议的默认路线
+
+如果你的目标是：
+
+- 稳定
+- 不吵
+- cache-friendly
+- 可解释
+- 可审计
+
+那么默认路线应该是：
+
+1. **L0 = Nocturne（或同类身份层）**
+2. **L3 默认走 L3b（memory-core / QMD / ClawDB）**
+3. **L2 只在需要知识证据时调用**
+4. **L3a（lossless-claw）作为可选实验，而不是默认主路**
+5. **MemOS 这类 per-run auto recall 注入，不作为默认范式**
+
+一句话总结：
+
+> 记忆系统的关键，不是“谁最强”，而是“谁该在第几层”。
+
+当层位摆正，工具会互补；当层位混乱，再强的工具也会互相污染。
