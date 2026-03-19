@@ -1,20 +1,16 @@
 ---
-title: "A Study in Memory, Pt. 6: Memory Tool Layers"
+title: "A Study in Memory, Pt. 6: Memory Tool Layers - Hydrated"
 date: 2026-03-17T00:33:00-07:00
 draft: false
 slug: "memory-tool-layers"
-tags: ["OpenClaw", "Memory", "Architecture", "Agent Design"]
+tags: ["OpenClaw", "Memory", "Architecture", "Agent Design", "Guide"]
 ---
 
-# 记忆工具分层：为什么不是“谁更强”，而是“谁该在第几层”
+# 记忆工具分层：从哲学到配置，为什么不是“谁更强”，而是“谁该在第几层”
 
 前几篇我们一直在讨论 OpenClaw 的 session、reset、compaction、memory flush，以及“为什么长期记忆不能等同于长会话”。
 
-这一篇要进一步解决一个更容易混乱的问题：
-
-> 面对 Nocturne、lossless-claw、QMD、ClawDB、Sirchmunk、MemOS 这类工具时，应该怎么判断它们各自处在什么层？
-
-很多争论并不是“谁对谁错”，而是把不同职责的工具拿到同一个维度比较了。
+这一篇要把这些“新知”彻底变成**可直接使用的技巧/配置/决策依据**。
 
 这篇文章采用一个固定方法论来梳理：
 
@@ -26,20 +22,20 @@ tags: ["OpenClaw", "Memory", "Architecture", "Agent Design"]
 
 在 agent 系统里，“memory”这个词至少混杂了三类完全不同的问题：
 
-1. **Identity / Constitution**
-   - 我是谁？
-   - 我遵守什么原则？
-   - 用户有哪些长期偏好、禁忌、约定？
+1.  **Identity / Constitution**
+    - 我是谁？
+    - 我遵守什么原则？
+    - 用户有哪些长期偏好、禁忌、约定？
 
-2. **Conversation Trace**
-   - 我们之前聊过什么？
-   - 上周那个 bug 的结论是什么？
-   - 哪个报错、哪个截图、哪条决定是谁提的？
+2.  **Conversation Trace**
+    - 我们之前聊过什么？
+    - 上周那个 bug 的结论是什么？
+    - 哪个报错、哪个截图、哪条决定是谁提的？
 
-3. **Knowledge Evidence**
-   - 我写过什么文档？
-   - 某个配置细节在哪篇笔记？
-   - 这个结论能不能回到原文和引用？
+3.  **Knowledge Evidence**
+    - 我写过什么文档？
+    - 某个配置细节在哪篇笔记？
+    - 这个结论能不能回到原文和引用？
 
 如果不先把这三类问题拆开，任何“记忆系统”最终都会走向混乱：
 
@@ -285,10 +281,10 @@ MemOS Cloud Plugin 的典型生命周期是：
 
 更好的问题是：
 
-1. 它解决的是 **identity / trace / evidence / web** 中的哪一类？
-2. 它默认是 **自动注入** 还是 **按需工具调用**？
-3. 它输出的是 **答案** 还是 **证据**？
-4. 它的代价是 **cache、可解释性、审计性、部署复杂度** 中的哪一项？
+1.  它解决的是 **identity / trace / evidence / web** 中的哪一类？
+2.  它默认是 **自动注入** 还是 **按需工具调用**？
+3.  它输出的是 **答案** 还是 **证据**？
+4.  它的代价是 **cache、可解释性、审计性、部署复杂度** 中的哪一项？
 
 一旦问题这样重写，分层就会自然浮现出来。
 
@@ -312,52 +308,208 @@ MemOS Cloud Plugin 的典型生命周期是：
 
 ---
 
-## 9) formal clarification：给出一个严谨而可执行的定义
+## 9) formal clarification：给出可执行的运行时路由（默认策略）
 
-基于上面的分析，可以得到一个清晰定义：
+**你最关心的：编号逻辑 vs 执行顺序**
 
-### L0
-负责人格、原则、偏好、禁忌与条件唤醒。  
-代表：**Nocturne**
+这套编号（L0-L3）是按**信息的“来源”和“性质”**分类，而不是执行顺序。执行顺序（L0→L3→L2→L1）则是按**成本与相关性**决策。
 
-### L3a
-负责上下文压缩与动态组装。  
-代表：**lossless-claw**
+| 编号逻辑 (Numbering Logic) | 类别 (Category) | 执行顺序 (Execution Order) | 原则 (Principle) |
+| :--- | :--- | :--- | :--- |
+| **L0** | Meta / Control Plane | **0** | **约束先于行动 (Self-Relevance First)** |
+| **L1** | Public / External | **3** | 最高成本、最后升级 |
+| **L2** | Private / Curated | **2** | 内部可信证据优先 |
+| **L3** | Instance / Trace | **1** | **最低成本、最高时效性 (Task-Relevance First)** |
 
-### L3b
-负责 `memory_search` / `memory_get` 的后端实现。  
-代表：**memory-core / QMD / ClawDB**
+这解释了为什么“最相关”的 L0 排第一（与 agent 自身最相关），然后才是与“当前任务”最相关的 L3。
 
-### L2
-负责本地知识与文档证据检索。  
-代表：**Sirchmunk**（候选）
+**默认路由（cache-friendly / 不吵）：**
 
-### L1
-负责外网证据补充。  
-代表：**tavily-search** 等
+1.  **Consult L0**：加载约束（原则/偏好/禁忌）
+2.  **按需调用 L3b**：只有在“需要历史证据”时才 `memory_search`/`memory_get`
+3.  **按需调用 L2**：只有在“需要文档证据”时才检索 KB（Sirchmunk/QMD/rg 等）
+4.  **必要时 L1**：外网补证
+5.  **写回可选**：只写“可复用结论/原则”，并保证可审计
 
 ---
 
-## 10) generalization：最终建议的默认路线
+## 10) generalization：选型与演进的最小决策树
 
-如果你的目标是：
-
-- 稳定
-- 不吵
-- cache-friendly
-- 可解释
-- 可审计
-
-那么默认路线应该是：
-
-1. **L0 = Nocturne（或同类身份层）**
-2. **L3 默认走 L3b（memory-core / QMD / ClawDB）**
-3. **L2 只在需要知识证据时调用**
-4. **L3a（lossless-claw）作为可选实验，而不是默认主路**
-5. **MemOS 这类 per-run auto recall 注入，不作为默认范式**
+- 你最在意 **人格约束与审计** → 先做 L0（Nocturne）
+- 你最在意 **稳定、缓存、可预测** → L3b（memory-core/QMD/ClawDB）优先
+- 你最在意 **“丢文件就能搜”且接受 LLM 调用** → L2（Sirchmunk）做增益
+- 你最在意 **超长叙事连续性** → 再考虑 L3a（lossless-claw）作为特例
 
 一句话总结：
 
 > 记忆系统的关键，不是“谁最强”，而是“谁该在第几层”。
 
 当层位摆正，工具会互补；当层位混乱，再强的工具也会互相污染。
+
+---
+
+## Hydration：实用配置、命令与决策矩阵
+
+### 配置片段（Configuration Snippets）
+
+#### memory-core（默认）
+```json5
+// ~/.openclaw/openclaw.json
+{
+  "agents": {
+    "defaults": {
+      "memorySearch": {
+        "enabled": true,
+        "provider": "openai", // or gemini/voyage/local/ollama
+        "model": "text-embedding-3-small",
+        // Hybrid search (BM25 + vector) for better relevance
+        "query": {
+          "hybrid": { "enabled": true, "vectorWeight": 0.7, "textWeight": 0.3 }
+        }
+      }
+    }
+  }
+}
+```
+
+#### QMD
+```json5
+// ~/.openclaw/openclaw.json
+{
+  "memory": {
+    "backend": "qmd",
+    "citations": "auto",
+    "qmd": {
+      "includeDefaultMemory": true,
+      "update": { "interval": "5m" },
+      "paths": [
+        { "name": "docs", "path": "~/your-docs-folder", "pattern": "**/*.md" }
+      ]
+    }
+  }
+}
+```
+
+#### lossless-claw
+```json5
+// ~/.openclaw/openclaw.json
+{
+  "plugins": {
+    "slots": {
+      "contextEngine": "lossless-claw"
+    },
+    "entries": {
+      "lossless-claw": {
+        "enabled": true,
+        "config": {
+          "freshTailCount": 32,
+          "contextThreshold": 0.75,
+          "incrementalMaxDepth": -1
+        }
+      }
+    }
+  }
+}
+```
+
+#### MemOS Cloud Plugin
+```json5
+// ~/.openclaw/openclaw.json
+{
+  "plugins": {
+    "entries": {
+      "memos-cloud-openclaw-plugin": {
+        "enabled": true,
+        "config": {
+          "apiKey": "YOUR_MEMOS_API_KEY",
+          "recallEnabled": true,
+          "recallGlobal": false, // Isolate by conversation
+          "memoryLimitNumber": 5, // Be conservative
+          "relativity": 0.5,
+          "recallFilterEnabled": true, // Recommended to reduce noise
+          "recallFilterModel": "qwen2.5:7b" // Use a local/cheap model for filtering
+        }
+      }
+    }
+  }
+}
+```
+
+### CLI 命令（CLI Recipes）
+
+#### QMD
+
+```bash
+# 检查状态
+qmd status
+
+# 手动更新索引
+qmd update
+
+# 手动生成 embeddings
+qmd embed
+
+# 搜索
+qmd query "your query" -c memory-root --json
+```
+
+#### lossless-claw
+
+```bash
+# 进入 TUI
+lcm-tui
+
+# TUI 里可以：
+# - 按 / 搜索
+# - 按 d/e/x 展开/描述节点
+# - 按 q 退出
+```
+
+#### Jujutsu (jj) / Git（用于 KB 维护）
+
+```bash
+# 检查 jj repo 状态
+cd ~/.openclaw/shared/knowledge
+jj status
+
+# 提交变更
+jj commit -m "docs: update memory architecture"
+
+# 查看日志
+jj log -n 5
+```
+
+### 决策矩阵：L3b 后端怎么选 (memory-core vs QMD vs ClawDB)
+
+| 维度 | memory-core | QMD | ClawDB |
+|---|---|---|---|
+| **Cache-Friendly** | ✅ (稳定 prompt) | ✅ (稳定 prompt) | ✅ (稳定 prompt) |
+| **可解释性** | ✅ (SQLite) | ✅ (SQLite + explain) | ✅ (WAL可回放) |
+| **社区成熟度** | ✅ (内置) | 🟢 (活跃，API趋稳) | 🔴 (新，社区信号弱) |
+| **部署复杂度** | ✅ (零配置) | 🟠 (需装 CLI/Bun/SQLite) | 🟠 (需起服务/配置队列) |
+| **是否需LLM API** | ❌ (可选) | ✅ (rerank/expand) | ❌ |
+| **性能** | 🟢 (够用) | 🟢 (本地混合) | 🟢 (WAL+DataFrame) |
+| **优雅点** | 简洁 | 本地混合检索 | 工程可靠性 |
+| **推荐默认？** | ✅ | 🟢 (值得尝试) | 🟠 (PoC 优先) |
+
+### 常见陷阱（Gotchas / Pitfalls）
+
+1.  **KV/prompt cache 命中率下降**
+    - **元凶**：lossless-claw、MemOS 等“每轮自动注入/改写上下文”的机制
+    - **后果**：每轮 prefill 成本上升，延迟变高，调试困难
+    - **对策**：默认用工具式 recall，保持 prompt 稳定
+
+2.  **L0/L3 混用污染人格**
+    - **元凶**：把 Nocturne 当资料库，或用 RAG 检索原则
+    - **后果**：agent 行为不可预测、约束时有时无
+    - **对策**：L0 只放“宪法”，不放“资料”；RAG 只检索“资料”，不碰“原则”
+
+3.  **双真相一致性地狱**
+    - **元凶**：MD 文件和 clawdb/qmd index 都被当成主存储
+    - **后果**：改了 MD，索引没跟上；或反之
+    - **对策**：明确“MD 为真相，索引为派生”，并建立单向同步机制（pull/push）
+
+4.  **忘记写回（Capture/Promotion 缺失）**
+    - **元凶**：只做 retrieval，忘了“自我进化”需要写回
+    - **后果**：agent 永远在重复犯错
+    - **对策**：建立“失败/纠错 → 写 learnings → 定期 review → 提升到 L0/KB”的闭环
