@@ -79,6 +79,7 @@ permalinks:
   yorozuya: "/:year/:month/:slug/"
   study-in-memory: "/study-in-memory/:slug/"
 
-author:
+params:
+  author:
   name: "Radon"
   email: "radon@example.com"
