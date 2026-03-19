@@ -78,3 +78,7 @@ permalinks:
   posts: "/posts/:year/:month/:slug/"
   yorozuya: "/:year/:month/:slug/"
   study-in-memory: "/study-in-memory/:slug/"
+
+author:
+  name: "Radon"
+  email: "radon@example.com"
