@@ -34,8 +34,10 @@ tags: ["OpenClaw", "Memory", "Debug", "Guide", "Best Practices"]
 **操作方法**：
 修改 `openclaw.json` 配置，可使用 CLI
 ```bash
-openclaw config set session.resetByType.dm.idleMinutes 10080      # dm, 7天
-openclaw config set session.resetByType.thread.idleMinutes 10080  # thread, 7天
+openclaw config set session.resetByType.dm.idleMinutes 10080      # dm (deprecated), 7天
+openclaw config set session.resetByType.direct.idleMinutes 10080  # 私聊, 7天
+openclaw config set session.resetByType.group.idleMinutes 10080   # 群聊, 7天
+openclaw config set session.resetByType.thread.idleMinutes 10080  # thread/FORUM topic, 7天
 ```
 
 **说明**：
@@ -43,6 +45,8 @@ openclaw config set session.resetByType.thread.idleMinutes 10080  # thread, 7天
 - 我的设置：7 天（10080 分钟）
 - `mode: "idle"` 表示**只使用 idle reset**，**不会触发 daily reset**
 - 同一对话 7 天内无活动后才会触发 reset
+- `dm` 是 `direct` 的 deprecated alias，建议用 `direct`
+- 四种会话类型：`direct`（私聊）、`group`（群聊）、`thread`（Forum topic）、`dm`（deprecated）
 
 **注意**：
 这只是延长 session 被自动重置的时间，减少因短期重置导致的记忆丢失风险。仍需配合 `/new` 或 memory search 保证记忆持久化。
