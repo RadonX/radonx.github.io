@@ -111,6 +111,15 @@ tags: ["OpenClaw", "Memory", "Architecture", "Agent Design"]
 
 层位摆正，工具自然互补。层位混乱，再强的工具也只会互相污染。这件事大概不只适用于记忆。
 
+## 从哪里开始
+
+几个问题帮你定位：
+
+- 你最担心 agent **人格飘移**（突然变了语气或立场）→ 先装 L0（Nocturne）
+- 你最在意**稳定、省钱、可预测** → L3b 用默认的 memory-core，不要动 lossless-claw
+- 你有大量本地文档需要检索，且能接受 LLM 调用 → 再考虑 Sirchmunk（L2）
+- 你发现 token 用量莫名翻倍 → 检查是否开了 lossless-claw 或 MemOS 的自动注入
+
 ---
 
 ## 参考
