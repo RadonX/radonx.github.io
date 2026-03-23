@@ -10,7 +10,7 @@ tags: ["OpenClaw", "Memory", "Architecture", "Agent Design"]
 
 我的 agent 把我忘了。
 
-不是隐喻。周一我们花了两个小时讨论一个部署方案，周二它问我是不是第一次用 OpenClaw。Session reset 之后，一切归零。它的语气甚至没有任何不安，就像一个每天早上都会把昨天的日记撕掉的人。
+不是隐喻。周一我们花了两个小时讨论一个部署方案，周二它问我是不是第一次用 OpenClaw。Session reset 之后，一切归零。它甚至没有那种忘记了什么的不安。它不是忘了，它是从来不知道自己应该记得。
 
 于是我开始在社区里翻，想给它装上某种长期记忆。Nocturne、lossless-claw、QMD、ClawDB、Sirchmunk、MemOS——名字一个比一个陌生，README 一个比一个自信。每个项目都在说自己解决了记忆问题，但当我试图把它们放在一起比较的时候，发现比不了。有人说 Nocturne 比 ClawDB 好，有人说反过来，两边的论据都无懈可击，结论却完全相反。
 
