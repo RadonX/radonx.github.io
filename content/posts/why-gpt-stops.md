@@ -6,6 +6,8 @@ slug: "why-gpt-stops"
 tags: ["OpenClaw", "Agent", "GPT", "Architecture", "Harness"]
 ---
 
+> **TL;DR** — 自主性不是模型属性，是 harness 属性。GPT 在 OpenClaw 里频繁停下来等你说继续，不是因为 GPT 笨，而是因为 OpenClaw 的外层提供了 `sessions_yield` 这个显式停机工具，而 GPT 恰好倾向于使用它。同一个 GPT 放到 Codex CLI 或 OpenCode 里，它会一路推进到稳定点才停。本文通过对三个 harness 源码的机制对照，把这个体感差异定位到了具体的代码行。
+
 ## 症状
 
 用 OpenClaw 跑 GPT 系列模型的人大概都遇到过这种情况：你给了一个明确的任务，agent 做到一半停了下来，说了一句类似"接下来你想让我怎么做？"或者"如果你需要我继续，请告诉我"。你说继续，它又做了一步，然后又停了。
