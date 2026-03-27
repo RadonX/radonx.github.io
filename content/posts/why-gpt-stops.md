@@ -32,6 +32,8 @@ Harness 是包裹在模型外面的那一层运行时。模型本身只做一件
 
 要理解 harness 的行为，有一个概念绕不过去：**稳定点**（fixed point）。
 
+![什么是稳定点](images/why-gpt-stops/stable-point.png)
+
 一个回合真正结束的条件，不是模型说了一句话，也不是模型没有再调工具。准确地说，稳定点是这样一种状态：
 
 - 没有待执行的工具调用
@@ -43,6 +45,8 @@ Harness 是包裹在模型外面的那一层运行时。模型本身只做一件
 一个好的 harness 会推进到稳定点才停。一个不够好的 harness 可能在到达稳定点之前就停下来了——不是因为任务完成了，而是因为某个机制打断了循环。
 
 ## 三个 harness 的对照
+
+![三款 Harness 循环机制对比](images/why-gpt-stops/harness-comparison.png)
 
 ### Codex CLI
 
