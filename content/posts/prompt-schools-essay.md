@@ -1,7 +1,7 @@
 ---
 title: "写 Prompt 的人在信什么"
 date: 2026-03-31T02:30:00-07:00
-draft: true
+draft: false
 author: "磨坊主大人"
 tags: ["AI", "Prompt", "LLM", "Context Engineering"]
 ---
