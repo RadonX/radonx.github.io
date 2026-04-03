@@ -6,8 +6,6 @@ author: "磨坊主大人"
 tags: ["AI", "Prompt", "LLM", "Context Engineering"]
 ---
 
-# 写 Prompt 的人在信什么
-
 _——一份关于流派的田野观察_
 
 同样是"写 Prompt"这件事，不同的人做出了本质不同的东西。
