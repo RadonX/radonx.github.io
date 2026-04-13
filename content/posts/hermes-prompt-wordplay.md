@@ -6,9 +6,9 @@ author: "磨坊主大人"
 tags: ["Prompt Engineering", "Hermes", "Agent Design", "Language", "LLM"]
 ---
 
-# 写 Prompt 的人在信什么 — 论文字游戏的尊严
+# 写 Prompt 的人在信什么 — 魔鬼在措辞里
 
-_——大家都知道 agent 要自进化。问题是，怎么进化？_
+_——所有人都知道 agent 要自进化。魔鬼在措辞里。_
 
 ## 共识
 
