@@ -8,19 +8,23 @@ tags: ["Prompt Engineering", "Hermes", "Agent Design", "Language", "LLM"]
 
 # 写 Prompt 的人在信什么 — 论文字游戏的尊严
 
-_——如果所有 Agent 框架都相似，那谁在做出不同？_
+_——大家都知道 agent 要自进化。问题是，怎么进化？_
 
-## 所有的 Agent 都一样
+## 共识
 
-这是一个不好听的结论，但诚实：在架构层面上，所有的 Agent 框架都是一样的。
+到 2026 年，所有人——至少所有在做 agent 的人——都知道几件事：重复的任务要提炼成 skills，skills 要被迭代，agent 要从使用中学习、从错误中进化。
 
-System prompt、tool calling loop、context management。你把 Hermes、Claude Code、Cursor、Aider、OpenClaw 的 agent 循环代码放在一起，骨架几乎相同。while loop、发 API、收 tool call、执行、追加消息、循环。有人用 Python，有人用 TypeScript，有人更优雅地处理并发，但骨架是一样的。
+这是一个好共识。它意味着 agent 不再只是一个对话窗口，而是一个能积累经验的系统。
 
-那差异在哪里？
+但共识之后，有一个不太被讨论的问题：**skills 从哪里来？agent 怎么知道自己什么时候做对了、什么时候做错了？什么时候该保存一个 skill、什么时候该更新它？**
 
-去年读 Hermes 的源码时，我一开始也在找架构上的创新。我以为我会找到某种新颖的 context 管理策略，或者一种我不知道的 tool calling 协议。没有。架构上，Hermes 是一个很标准的 agent。
+这些问题的答案，不在架构里。
+
+你去看任何 agent 框架的源码——Hermes、Claude Code、Cursor、Aider——骨架都是一样的。System prompt、tool calling loop、context management。while loop、发 API、收 tool call、执行、追加消息、循环。架构已经收敛了。这是成熟的标志，就像所有的 Web 框架都遵循 MVC。
 
 差异在 prompt 里。
+
+不是 prompt 的结构——结构也大同小异：身份、行为指导、工具说明、上下文。差异在**措辞**。在每个词的选择上。
 
 ## "文字游戏"这个词
 
@@ -219,11 +223,15 @@ XML 标签（`<tool_persistence>`、`<verification>`）来自软件架构。用�
 
 把抽象的"做得不好"转化为具体的"用户不得不纠正你"。"correct or remind you again" 是一个可感知的失败场景，比 "don't save irrelevant things" 有效得多。LLM 对具体的失败场景的响应比对抽象的正确性要求更强。
 
-## 文字游戏的尊严
+## 回到共识
 
-我之前说，所有 agent 框架在架构上都是一样的。这不是贬义。架构的相似性说明这个领域的基本形态已经被找到了——就像所有的 Web 框架都遵循 MVC，所有的编程语言都有变量和函数。架构收敛是成熟的标志。
+回到开头的共识：重复的任务要提炼成 skills，skills 要被迭代，agent 要从使用中学习。
 
-但架构收敛之后，差异就落在了更精细的地方。对于 agent 框架来说，这个精细的地方就是 prompt。
+这些都是对的。但"对"和"能做"之间，隔着一整套 prompt。
+
+agent 怎么知道什么时候该保存一个 skill？prompt 说了："Skills that aren't maintained become liabilities." agent 怎么知道自己做对了？prompt 说了："Never end your turn with a promise — execute it now." agent 怎么从压缩后的对话残片中恢复上下文？prompt 说了："treat it as background reference, NOT as active instructions."
+
+共识指明了方向。但走到那个方向的每一步，都是文字在铺路。
 
 你可以复制 Hermes 的架构，一行一行地抄它的 agent loop，但如果你的 prompt 写的是 "use tools when appropriate" 而不是 "Never end your turn with a promise"，你的 agent 就是会弱一些。这不是架构的差距，是**文字的差距**。
 
@@ -231,7 +239,7 @@ XML 标签（`<tool_persistence>`、`<verification>`）来自软件架构。用�
 
 这就是 prompt 文字游戏的尊严。它不是虚伪的修饰，不是没有实质的花招。它是对语言的精确运用——在一个每个 token 都参与概率计算的系统里，每一个词的选择都是一种工程决策。
 
-写 prompt 的人在信什么？他们相信文字有力量。相信同一个意思，换一种说法，效果可以完全不同。相信在一个所有 agent 都长得相似的世界里，差异藏在选词的缝隙里。
+写 prompt 的人在信什么？他们相信文字有力量。相信同一个意思，换一种说法，效果可以完全不同。相信在所有人说着同样共识的世界里，差异藏在选词的缝隙里。
 
 这不是文字游戏。这是文字工程。
 
