@@ -12,15 +12,15 @@ _——大家都知道 agent 要自进化。问题是，怎么进化？_
 
 ## 共识
 
-到 2026 年，所有人——至少所有在做 agent 的人——都知道几件事：重复的任务要提炼成 skills，skills 要被迭代，agent 要从使用中学习、从错误中进化。
+到 2026 年，所有人都知道几件事：重复的任务要提炼成 skills，skills 要被迭代，agent 要从使用中学习。
 
-这是一个好共识。它意味着 agent 不再只是一个对话窗口，而是一个能积累经验的系统。
+这是一个好共识。
 
 但共识之后，有一个不太被讨论的问题：**skills 从哪里来？agent 怎么知道自己什么时候做对了、什么时候做错了？什么时候该保存一个 skill、什么时候该更新它？**
 
 这些问题的答案，不在架构里。
 
-你去看任何 agent 框架的源码——Hermes、Claude Code、Cursor、Aider——骨架都是一样的。System prompt、tool calling loop、context management。while loop、发 API、收 tool call、执行、追加消息、循环。架构已经收敛了。这是成熟的标志，就像所有的 Web 框架都遵循 MVC。
+你去看任何 agent 框架的源码——Hermes、Claude Code、Cursor、Aider——骨架都是一样的。System prompt、tool calling loop、context management。骨架已经收敛了。
 
 差异在 prompt 里。
 
@@ -28,9 +28,9 @@ _——大家都知道 agent 要自进化。问题是，怎么进化？_
 
 ## "文字游戏"这个词
 
-说某件事是"文字游戏"，在中文语境里带着贬义。仿佛在说：你不过是在玩弄字眼，没有实质内容。
+说某件事是"文字游戏"，在中文语境里带着贬义——你不过是在玩弄字眼，没有实质内容。
 
-但我想认真对待这个词。文字游戏——如果你真正在玩的话——是人类最古老的智力活动之一。诗人玩文字游戏，律师玩文字游戏，外交官玩文字游戏。同一个意思，换一种说法，效果完全不同。这不是虚伪，这是语言的本质。
+文字游戏——如果你真正在玩的话——是人类最古老的智力活动之一。诗人玩文字游戏，律师玩文字游戏，外交官玩文字游戏。同一个意思，换一种说法，效果完全不同。这不是虚伪，这是语言的本质。
 
 对于 LLM 来说，文字游戏不是虚伪，而是**唯一的工作方式**。LLM 不理解你的"意图"，它理解你的 token。每一个 token 都在参与一个概率计算，改变下一个 token 的生成分布。所以每一个词的选择，都在做功——或者在浪费。
 
@@ -41,8 +41,6 @@ Hermes 的 prompt 之所以有效，不是因为它说了什么不同的话，�
 大多数 agent 的 prompt 里都有一句类似这样的话：
 
 > "Use tools when appropriate."（在适当时使用工具。）
-
-这句 prompt 几乎不起作用。"appropriate" 是一个模糊的词，LLM 对它的理解高度依赖训练数据中的统计分布。在很多训练样本里，agent 被鼓励先思考再行动，先解释再执行。所以 "use tools when appropriate" 实际上被解读为 "先说你会做什么，然后再做"。
 
 Hermes 说的是：
 
@@ -57,14 +55,12 @@ Hermes 说的是：
 
 ## "thinking" 是一个危险的词
 
-Hermes 的 OpenAI 模型适配 prompt 里有一句话，我第一次读到时以为写错了：
+Hermes 的 OpenAI 模型适配 prompt 里有一句话：
 
 > "NEVER answer these from memory or mental computation — ALWAYS use a tool."
 > （永远不要从记忆或心算中回答这些问题——始终使用工具。）
 
 "mental computation"。不是 "thinking"，不是 "reasoning"，不是 "knowledge"。是 "mental computation"。
-
-这三个词选择背后有非常精确的考量。
 
 "thinking" 和 "reasoning" 在 LLM 的 embedding 空间里，和 "I think"、"I believe"、"Let me reason about this" 强关联。当你在 prompt 里写 "don't think" 或 "don't reason"，你实际上在激活一个包含自信表达、第一人称推理的语义空间。这会让模型更倾向于给出它认为正确的答案——而这恰恰是你想阻止的行为。
 
@@ -76,7 +72,7 @@ Hermes 的 OpenAI 模型适配 prompt 里有一句话，我第一次读到时以
 
 Hermes 的 memory guidance 重新定义了一个核心问题：**什么东西值得记住？**
 
-大多数 agent 的 memory prompt 说的是 "remember important things" 或 "save useful context"。这太模糊了。什么是"重要的"？什么是有用的"？LLM 会按照训练数据中的统计分布来理解这些词——通常意味着记住用户说过的有趣事实、项目名称、偏好设置。
+大多数 agent 的 memory prompt 说的是 "remember important things" 或 "save useful context"。这太模糊了。LLM 会按照训练数据中的统计分布来理解这些词——通常意味着记住用户说过的有趣事实、项目名称、偏好设置。
 
 Hermes 说的是：
 
@@ -91,7 +87,7 @@ Hermes 说的是：
 
 ## 压缩之后的世界
 
-上下文压缩（context compaction）是 agent 框架中一个常见但很少被仔细处理的问题。当对话超过上下文窗口时，中间的消息被摘要化，然后注入回来。
+上下文压缩（context compaction）常见但很少被仔细处理。当对话超过上下文窗口时，中间的消息被摘要化，然后注入回来。
 
 大多数框架做的事情很简单：生成摘要，加一个标记，继续对话。问题在于，LLM 经常把摘要中的旧指令当作当前指令来执行。摘要里有一句"帮我写 README"，agent 就会再写一遍 README。
 
@@ -122,13 +118,11 @@ Hermes 对 skill 维护的指导只有一句话：
 > "Skills that aren't maintained become liabilities."
 > （不被维护的技能会变成负债。）
 
-六个词。没有解释什么是 liability。没有给例子。
-
-但 LLM 完全理解。
+六个词。LLM 完全理解。
 
 "liabilities" 来自金融和会计。在那个领域，资产（assets）和负债（liabilities）是同一枚硬币的两面：一个能产生收益的资产，如果维护成本超过收益，就变成了负债。这句话把 skill 从"资产"重新定义为"可能变成负债的资产"——一个带条件的、有风险的东西。
 
-如果展开成 "Skills that are outdated or incorrect may cause the agent to produce wrong results, so you should update them regularly"，token 数翻倍，效果减半。LLM 对隐喻的理解比对逻辑推导更好——因为隐喻在训练数据中更频繁地出现在强烈的语境中。"become liabilities" 有一种紧迫感，而 "should be updated" 没有。
+如果展开成 "Skills that are outdated or incorrect may cause the agent to produce wrong results, so you should update them regularly"，token 数翻倍，效果减半。
 
 ## 先禁后放
 
@@ -142,8 +136,6 @@ Hermes 对 skill 维护的指导只有一句话：
 "Every response should either (a) contain tool calls that make progress, 
  or (b) deliver a final result to the user."
 ```
-
-先说"你必须"，再说"你不能"，最后说"但你可以这样做"。
 
 这是法律文本的标准结构。法律先定义禁止行为，然后定义例外条件，最后定义合规路径。LLM 对这种结构的遵从度比 "你可以做 A 或 B" 更高，因为它同时完成了三件事：建立边界（你不能 X）、锚定理解（X 是什么）、提供出路（你可以 Y）。
 
@@ -162,11 +154,11 @@ Hermes 系统性地使用机器/系统词汇来描述 agent 的行为：
 "compact" 代替 "summarize"
 ```
 
-这不是偶然的。这不是某个人的个人风格，而是一种有意识的设计选择。
+这不是偶然的设计。
 
 为什么机器词汇比人类词汇更有效？因为 LLM 的训练数据中，机器词汇更频繁地出现在"正确执行"的语境里。当你说 "call a tool"，LLM 更倾向于生成一个实际的 tool_call 函数调用。当你说 "take an action"，LLM 更倾向于生成一段描述它将要采取什么行动的文字。
 
-更深层的原因是：机器词汇减少了 LLM 的"拟人化"倾向。当 prompt 中充斥着 "thinking"、"reasoning"、"I feel like" 这样的词时，LLM 更容易进入一种"我是一个有思考能力的实体"的模式，从而更倾向于自信地给出未经验证的答案。当 prompt 中使用 "computation"、"tool call"、"session" 这样的词时，LLM 更倾向于保持在一种"我是一个执行指令的系统"的模式里。
+更深层：机器词汇减少了 LLM 的拟人化倾向。"computation"、"tool call" 让模型保持在"执行指令的系统"模式里。
 
 ## "genuinely changes" — 一个极高的阈值
 
@@ -187,7 +179,7 @@ Hermes 的 act_dont_ask 里有一句话设置了 agent 何时应该询问用户�
 
 ## 跨领域的窃取
 
-Hermes 的 prompt 措辞不是凭空发明的。它们从其他领域借来了特定的语言模式，然后移植到了 prompt 的语境中。
+Hermes 的措辞从其他领域借来了语言模式。
 
 "mental computation" 来自认知心理学。Kahneman 的《思考，快与慢》区分了 System 1（快速直觉）和 System 2（缓慢推理）。"Mental computation" 对应的是 System 1 的那种不经工具验证的快速直觉——你觉得自己知道答案，所以不再查证。
 
